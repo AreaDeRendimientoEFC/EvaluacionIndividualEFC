@@ -128,6 +128,10 @@ tr:hover td{background:#fafafa;}
     <button data-page="historial">Historial</button>
     <button data-page="dashboard">Dashboard</button>
   </div>
+  <div style="margin-left:auto;display:flex;align-items:center;padding:0 16px;gap:8px">
+    <span id="syncStatus" style="font-size:10px;color:var(--muted)"></span>
+    <button id="adminBadge" onclick="toggleAdmin()" style="border:1px solid var(--border);background:rgba(107,122,138,.1);color:var(--muted);border-radius:20px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">👁 Solo lectura</button>
+  </div>
 </nav>
 
 <!-- JUGADORES -->
@@ -398,6 +402,8 @@ tr:hover td{background:#fafafa;}
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
 <script>
 var players=JSON.parse(localStorage.getItem('efc_players')||'[]');
 var sessions=JSON.parse(localStorage.getItem('efc_sessions')||'[]');
@@ -407,7 +413,79 @@ var mdOffset=0,mdVidDur=0,currentSess=null,mdVideoSrc=null,mdVideoSessionId=null
 var clipStartSecs=null,clipBeforeSecs=5,clipAfterSecs=5,clipLastBefore=5,clipLastAfter=5;
 var chartGlobal=null,actionCharts={},compileAborted=false;
 
-function save(){localStorage.setItem('efc_players',JSON.stringify(players));localStorage.setItem('efc_sessions',JSON.stringify(sessions));}
+/* FIREBASE SYNC */
+var firebaseConfig={
+  apiKey:"AIzaSyChKluyxxLZBsqxPUNcWrbaUWfaltKaJIo",
+  authDomain:"evaluacionindividual-efc.firebaseapp.com",
+  projectId:"evaluacionindividual-efc",
+  storageBucket:"evaluacionindividual-efc.firebasestorage.app",
+  messagingSenderId:"462144100422",
+  appId:"1:462144100422:web:4c9d3ae6b4be0c0a1f5247"
+};
+var db=null,fsReady=false,suppressSnapshot=false,fsFirstLoad=true;
+function setSyncStatus(txt,color){var el=document.getElementById('syncStatus');if(el){el.textContent=txt;el.style.color=color||'var(--muted)';}}
+function initFirebase(){
+  try{
+    firebase.initializeApp(firebaseConfig);
+    db=firebase.firestore();
+    fsReady=true;
+    setSyncStatus('⏳ Conectando...');
+    db.collection('efc_data').doc('main').onSnapshot(function(doc){
+      if(suppressSnapshot){suppressSnapshot=false;setSyncStatus('☁️ Sincronizado','var(--green)');return;}
+      if(doc.exists){
+        var d=doc.data();
+        players=d.players||players;
+        sessions=d.sessions||sessions;
+        localStorage.setItem('efc_players',JSON.stringify(players));
+        localStorage.setItem('efc_sessions',JSON.stringify(sessions));
+        migrateOldSessions();
+        refreshCurrentView();
+        setSyncStatus('☁️ Sincronizado','var(--green)');
+      } else if(fsFirstLoad){
+        save();
+      }
+      fsFirstLoad=false;
+    },function(err){
+      console.error('Firestore error',err);
+      setSyncStatus('⚠️ Sin conexión — datos locales','var(--warn)');
+    });
+  }catch(e){console.error('Firebase init error',e);setSyncStatus('⚠️ Error de conexión','var(--danger)');}
+}
+function refreshCurrentView(){
+  renderPlayers();
+  var active=document.querySelector('.page.active');
+  var pg=active?active.id.replace('pg-',''):'jugadores';
+  if(pg==='live')populateLiveSelect();
+  if(pg==='historial'){populateHistFilter();renderHistorial();}
+  if(pg==='dashboard')populateDashSelect();
+}
+
+/* ADMIN MODE — cambia esta clave por la tuya */
+var ADMIN_PASSWORD='efc2026';
+var isAdmin=localStorage.getItem('efc_admin')==='1';
+function updateAdminBadge(){
+  var b=document.getElementById('adminBadge');if(!b)return;
+  if(isAdmin){b.textContent='✏️ Modo Admin';b.style.background='rgba(0,120,24,.1)';b.style.color='var(--green)';b.style.borderColor='var(--green)';}
+  else{b.textContent='👁 Solo lectura';b.style.background='rgba(107,122,138,.1)';b.style.color='var(--muted)';b.style.borderColor='var(--border)';}
+}
+function toggleAdmin(){
+  if(isAdmin){isAdmin=false;localStorage.removeItem('efc_admin');updateAdminBadge();toast('Modo lectura activado');return;}
+  var p=prompt('Clave de administrador:');
+  if(p===null)return;
+  if(p===ADMIN_PASSWORD){isAdmin=true;localStorage.setItem('efc_admin','1');updateAdminBadge();toast('✅ Modo admin activado','#007818');}
+  else toast('Clave incorrecta','#e84040');
+}
+function requireAdmin(){if(!isAdmin){toast('🔒 Solo lectura — activa el modo admin para editar','#f5a623');return false;}return true;}
+
+function save(){
+  localStorage.setItem('efc_players',JSON.stringify(players));
+  localStorage.setItem('efc_sessions',JSON.stringify(sessions));
+  if(fsReady&&db){
+    suppressSnapshot=true;
+    setSyncStatus('⏳ Guardando...');
+    db.collection('efc_data').doc('main').set({players:players,sessions:sessions,updatedAt:firebase.firestore.FieldValue.serverTimestamp()}).catch(function(e){console.error('Firestore save error',e);setSyncStatus('⚠️ Error al guardar','var(--danger)');toast('⚠️ No se pudo guardar en la nube','#e84040');});
+  }
+}
 function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2);}
 function ini(n){return n.split(' ').map(function(w){return w[0];}).join('').toUpperCase().slice(0,2);}
 var PCOLS=['#F0601A','#007818','#e84040','#f5a623','#8b5cf6','#06b6d4'];
@@ -486,8 +564,8 @@ function renderPlayers(){
       '<div style="margin-top:7px;display:flex;flex-wrap:wrap;gap:3px;cursor:pointer" onclick="editPlayer(\''+p.id+'\')">'+chips+'</div></div>';
   }).join('');
 }
-function openNewPlayer(){editingId=null;tempTags=[];['mpName','mpPos','mpNum','mpTagInput','mpTagDescYes','mpTagDescNo'].forEach(function(i){document.getElementById(i).value='';});document.getElementById('mpTitle').textContent='Nuevo Jugador';renderTempTags();openModal('modalPlayer');}
-function editPlayer(id){var p=players.find(function(x){return x.id===id;});if(!p)return;editingId=id;tempTags=p.tags.map(function(t){return typeof t==='string'?{label:t,descYes:'',descNo:''}:{label:t.label,descYes:t.descYes||'',descNo:t.descNo||''};});document.getElementById('mpName').value=p.name;document.getElementById('mpPos').value=p.position||'';document.getElementById('mpNum').value=p.number||'';['mpTagInput','mpTagDescYes','mpTagDescNo'].forEach(function(i){document.getElementById(i).value='';});document.getElementById('mpTitle').textContent='Editar Jugador';renderTempTags();openModal('modalPlayer');}
+function openNewPlayer(){if(!requireAdmin())return;editingId=null;tempTags=[];['mpName','mpPos','mpNum','mpTagInput','mpTagDescYes','mpTagDescNo'].forEach(function(i){document.getElementById(i).value='';});document.getElementById('mpTitle').textContent='Nuevo Jugador';renderTempTags();openModal('modalPlayer');}
+function editPlayer(id){if(!requireAdmin())return;var p=players.find(function(x){return x.id===id;});if(!p)return;editingId=id;tempTags=p.tags.map(function(t){return typeof t==='string'?{label:t,descYes:'',descNo:''}:{label:t.label,descYes:t.descYes||'',descNo:t.descNo||''};});document.getElementById('mpName').value=p.name;document.getElementById('mpPos').value=p.position||'';document.getElementById('mpNum').value=p.number||'';['mpTagInput','mpTagDescYes','mpTagDescNo'].forEach(function(i){document.getElementById(i).value='';});document.getElementById('mpTitle').textContent='Editar Jugador';renderTempTags();openModal('modalPlayer');}
 function addTagInput(){var v=document.getElementById('mpTagInput').value.trim();if(!v)return;tempTags.push({label:v,descYes:document.getElementById('mpTagDescYes').value.trim(),descNo:document.getElementById('mpTagDescNo').value.trim()});['mpTagInput','mpTagDescYes','mpTagDescNo'].forEach(function(i){document.getElementById(i).value='';});renderTempTags();}
 function renderTempTags(){
   document.getElementById('mpTagList').innerHTML=tempTags.map(function(t,i){
@@ -504,6 +582,7 @@ function renderTempTags(){
 function updateTag(i,field,val){if(tempTags[i])tempTags[i][field]=val;}
 function removeTag(i){tempTags.splice(i,1);renderTempTags();}
 function savePlayer(){
+  if(!requireAdmin())return;
   var name=document.getElementById('mpName').value.trim();if(!name){toast('Nombre requerido','#e84040');return;}
   var tags=tempTags.map(function(t){return{label:t.label||'',descYes:t.descYes||'',descNo:t.descNo||''};});
   if(editingId){var p=players.find(function(x){return x.id===editingId;});p.name=name;p.position=document.getElementById('mpPos').value.trim();p.number=document.getElementById('mpNum').value;p.tags=tags;}
@@ -511,6 +590,7 @@ function savePlayer(){
   save();closeModal('modalPlayer');renderPlayers();
 }
 function deletePlayer(id){
+  if(!requireAdmin())return;
   var p=players.find(function(x){return x.id===id;});if(!p)return;
   var sc=sessions.filter(function(s){return s.playerId===id;}).length;
   showConfirm('Eliminar jugador','Se eliminará el perfil de '+p.name+'.'+(sc>0?' Sus '+sc+' sesiones se conservarán.':''),function(){players=players.filter(function(x){return x.id!==id;});save();renderPlayers();});
@@ -538,6 +618,7 @@ function renderTagGrid(tags){
   }).join('');
 }
 function tagAction(action,result,btn){
+  if(!requireAdmin())return;
   var cur=getCurrentTime();
   liveLog.unshift({id:uid(),action:action,result:result,ts:cur.ts,secs:cur.secs,period:cur.period});
   btn.style.opacity='.45';setTimeout(function(){btn.style.opacity='1';},180);
@@ -560,6 +641,7 @@ function renderLiveLog(){
   }).join('');
 }
 function delLog(id){
+  if(!requireAdmin())return;
   liveLog=liveLog.filter(function(x){return x.id!==id;});
   Object.values(liveCharts).forEach(function(c){try{c.destroy();}catch(e){}});liveCharts={};
   document.getElementById('liveChartsPanel').innerHTML='<div class="empty" style="padding:12px">Empieza a taggear para ver las gráficas</div>';
@@ -603,6 +685,7 @@ function renderLiveCharts(){
 }
 
 function openCloseSession(){
+  if(!requireAdmin())return;
   var pid=document.getElementById('livePlayer').value;if(!pid)return;
   var p=players.find(function(x){return x.id===pid;});
   var labels=p.tags.map(tagLabel);var sc=computeScores(liveLog,labels);
@@ -614,6 +697,7 @@ function openCloseSession(){
   openModal('modalSession');
 }
 function saveSession(){
+  if(!requireAdmin())return;
   var pid=document.getElementById('livePlayer').value;if(!pid)return;
   var p=players.find(function(x){return x.id===pid;});
   var labels=p.tags.map(tagLabel);var sc=computeScores(liveLog,labels);
@@ -635,7 +719,7 @@ function renderHistorial(){
   em.style.display='none';
   tb.innerHTML=list.map(function(s){var pct=s.scores&&s.scores.globalPct!=null?s.scores.globalPct:null;return '<tr><td><strong>'+s.playerName+'</strong></td><td>'+fmtDate(s.date)+'</td><td>'+s.rival+'</td><td>'+s.minutes+"'</td><td style=\"color:var(--muted)\">"+s.log.length+'</td><td>'+(pct!=null?'<span class="badge '+bdg(pct)+'">'+pct+'%</span>':'—')+'</td><td style="white-space:nowrap"><button class="btn btn-ghost btn-sm" onclick="openDetail(\''+s.id+'\')" style="margin-right:4px">Ver/Video</button><button class="btn btn-sm" onclick="deleteSession(\''+s.id+'\')" style="background:rgba(232,64,64,.08);border:1px solid rgba(232,64,64,.2);color:#c02020">✕</button></td></tr>';}).join('');
 }
-function deleteSession(id){var s=sessions.find(function(x){return x.id===id;});if(!s)return;showConfirm('Eliminar sesión','Sesión de '+s.playerName+' vs '+s.rival+' ('+fmtDate(s.date)+'). No se puede deshacer.',function(){sessions=sessions.filter(function(x){return x.id!==id;});save();renderHistorial();});}
+function deleteSession(id){if(!requireAdmin())return;var s=sessions.find(function(x){return x.id===id;});if(!s)return;showConfirm('Eliminar sesión','Sesión de '+s.playerName+' vs '+s.rival+' ('+fmtDate(s.date)+'). No se puede deshacer.',function(){sessions=sessions.filter(function(x){return x.id!==id;});save();renderHistorial();});}
 
 /* DETAIL + VIDEO */
 function openDetail(sid){
@@ -915,6 +999,7 @@ function exportData(){
   toast('✅ Backup descargado','#007818');
 }
 function importData(input){
+  if(!requireAdmin()){input.value='';return;}
   var file=input.files[0];if(!file)return;
   var reader=new FileReader();
   reader.onload=function(e){
@@ -949,6 +1034,8 @@ function migrateOldSessions(){
 function init(){
   if(!players.length){players.push({id:'demo1',name:'Carlos Ríos',position:'Mediocampista',number:'8',tags:[{label:'Escanear antes de recibir',descYes:'Mira el entorno al menos 2 veces antes del balón',descNo:'Recibe sin mirar, de espaldas al juego'},{label:'Manejar perfil correcto',descYes:'Se orienta para ver el campo antes de controlar',descNo:'Controla sin perfil, pierde opciones de pase'},{label:'Presión alta sin balón',descYes:'Presiona al portador con intensidad y dirección',descNo:'Camina o no presiona al rival'},{label:'Conducción entre líneas',descYes:'Conduce hacia espacios entre defensas y medios',descNo:'Conduce hacia atrás o hacia zona sin peligro'},{label:'Apoyo al portador',descYes:'Se ofrece en ángulo y distancia correcta',descNo:'No se mueve o se queda estático sin ofrecer opción'}]});save();}
   migrateOldSessions();renderPlayers();
+  updateAdminBadge();
+  initFirebase();
 }
 init();
 </script>
