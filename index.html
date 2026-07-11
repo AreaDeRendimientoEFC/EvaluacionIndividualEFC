@@ -1,0 +1,956 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EFC · Player Eval</title>
+<style>
+:root{--bg:#f5f6f8;--surface:#fff;--card:#fff;--border:#e2e6ea;--orange:#F0601A;--orange2:#c44e14;--green:#007818;--green2:#005c12;--text:#1a1f26;--muted:#6b7a8a;--danger:#e84040;--warn:#f5a623;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:'Segoe UI',sans-serif;min-height:100vh;}
+nav{background:#fff;border-bottom:3px solid var(--orange);display:flex;align-items:stretch;height:54px;box-shadow:0 1px 4px rgba(0,0,0,.06);}
+.nav-brand{display:flex;align-items:center;padding:0 20px;border-right:1px solid var(--border);}
+.nav-title{font-weight:800;font-size:14px;line-height:1.1;}
+.nav-title span{display:block;font-size:10px;color:var(--orange);font-weight:600;letter-spacing:1px;text-transform:uppercase;}
+.nav-links{display:flex;}
+nav button{background:none;border:none;color:var(--muted);font-size:13px;padding:0 16px;cursor:pointer;transition:all .2s;border-bottom:3px solid transparent;margin-bottom:-3px;font-weight:500;}
+nav button.active,nav button:hover{color:var(--text);border-bottom-color:var(--orange);}
+.page{display:none;padding:20px;max-width:1300px;margin:0 auto;}
+.page.active{display:block;}
+.card{background:#fff;border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,.04);}
+.card-ol{border-left:3px solid var(--orange);}
+h2{font-size:15px;font-weight:700;margin-bottom:12px;}
+h3{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px;}
+.btn{display:inline-flex;align-items:center;gap:5px;padding:7px 14px;border-radius:7px;border:none;font-size:13px;font-weight:600;cursor:pointer;transition:all .15s;}
+.btn-orange{background:var(--orange);color:#fff;}.btn-orange:hover{background:var(--orange2);}
+.btn-green{background:var(--green);color:#fff;}.btn-green:hover{background:var(--green2);}
+.btn-warn{background:var(--warn);color:#000;}
+.btn-ghost{background:transparent;border:1px solid var(--border);color:var(--text);}.btn-ghost:hover{background:var(--bg);}
+.btn-sm{padding:5px 11px;font-size:12px;}
+.btn-period{flex:1;padding:10px;border-radius:8px;border:2px solid var(--border);background:var(--bg);color:var(--muted);cursor:pointer;font-size:13px;font-weight:700;transition:all .2s;text-align:center;}
+.btn-period.running{border-color:var(--green);color:var(--green);background:rgba(0,120,24,.06);animation:pulse 2s infinite;}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(0,120,24,.2)}50%{box-shadow:0 0 0 6px rgba(0,120,24,0)}}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
+input,select,textarea{background:#f5f6f8;border:1px solid var(--border);color:var(--text);border-radius:7px;padding:7px 11px;font-size:13px;width:100%;outline:none;transition:border .2s;}
+input:focus,select:focus,textarea:focus{border-color:var(--orange);}
+label{font-size:12px;color:var(--muted);display:block;margin-bottom:3px;}
+.form-group{margin-bottom:10px;}
+.player-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px;}
+.player-card{background:#fff;border:1px solid var(--border);border-radius:10px;padding:14px;transition:all .15s;position:relative;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.04);}
+.player-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--orange),var(--green));}
+.player-card:hover{border-color:var(--orange);box-shadow:0 4px 12px rgba(240,96,26,.12);}
+.avatar{width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:15px;color:#fff;}
+.tag-pair{background:#f9fafb;border:1px solid var(--border);border-radius:9px;padding:11px 13px;margin-bottom:8px;}
+.tag-pair-label{font-size:13px;font-weight:600;margin-bottom:7px;}
+.tag-btns{display:flex;gap:7px;}
+.tb-y{flex:1;background:rgba(0,120,24,.08);border:1.5px solid var(--green);color:var(--green);border-radius:7px;padding:9px;font-size:13px;font-weight:600;cursor:pointer;transition:all .15s;text-align:center;}
+.tb-y:active{background:var(--green);color:#fff;}
+.tb-n{flex:1;background:rgba(232,64,64,.07);border:1.5px solid var(--danger);color:var(--danger);border-radius:7px;padding:9px;font-size:13px;font-weight:600;cursor:pointer;transition:all .15s;text-align:center;}
+.tb-n:active{background:var(--danger);color:#fff;}
+.tag-desc-row{display:flex;gap:8px;margin-top:6px;}
+.tag-desc-yes{flex:1;font-size:11px;color:var(--green);background:rgba(0,120,24,.06);border-radius:5px;padding:4px 7px;line-height:1.4;}
+.tag-desc-no{flex:1;font-size:11px;color:#c02020;background:rgba(232,64,64,.06);border-radius:5px;padding:4px 7px;line-height:1.4;}
+.pc{font-size:11px;color:var(--muted);text-align:right;margin-top:4px;}
+.log-list{max-height:320px;overflow-y:auto;display:flex;flex-direction:column;gap:4px;}
+.log-item{background:#f9fafb;border:1px solid var(--border);border-radius:7px;padding:6px 10px;display:flex;align-items:center;gap:6px;font-size:13px;flex-wrap:wrap;}
+.log-ts{color:var(--orange);font-size:11px;font-weight:700;min-width:52px;}
+.log-ts.click{cursor:pointer;text-decoration:underline dotted;}
+.log-period{font-size:10px;background:rgba(240,96,26,.1);color:var(--orange);border-radius:4px;padding:1px 5px;font-weight:700;}
+.log-icon{font-size:13px;min-width:16px;}
+.log-act{flex:1;min-width:80px;}
+.log-del{color:var(--muted);cursor:pointer;font-size:15px;line-height:1;}
+.log-del:hover{color:var(--danger);}
+.clip-timing{display:flex;align-items:center;gap:3px;font-size:11px;color:var(--muted);}
+.clip-timing input{width:36px;padding:2px 4px;font-size:11px;background:#f0f0f0;border:1px solid var(--border);border-radius:4px;color:var(--text);text-align:center;}
+.tl-wrap{position:relative;height:28px;background:#f5f6f8;border-radius:6px;overflow:hidden;margin-top:8px;cursor:pointer;border:1px solid var(--border);}
+.tl-prog{position:absolute;left:0;top:0;bottom:0;background:rgba(240,96,26,.15);pointer-events:none;}
+.tl-marks{position:absolute;inset:0;}
+.clip-box{background:#000;border-radius:8px;overflow:hidden;}
+.clip-box video{width:100%;display:block;max-height:200px;object-fit:contain;}
+.clip-controls{padding:10px;background:#111;display:flex;flex-direction:column;gap:8px;}
+.clip-range-row{display:flex;align-items:center;gap:6px;font-size:12px;color:#aaa;}
+.clip-range-row input[type=range]{flex:1;accent-color:var(--orange);}
+.pbar{height:6px;border-radius:3px;background:var(--border);overflow:hidden;margin-top:3px;}
+.pbar-fill{height:100%;border-radius:3px;}
+.stat-box{background:#f9fafb;border:1px solid var(--border);border-radius:8px;padding:12px;text-align:center;position:relative;overflow:hidden;}
+.stat-box::after{content:'';position:absolute;bottom:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--orange),var(--green));}
+.stat-box .val{font-size:24px;font-weight:800;}
+.stat-box .lbl{font-size:11px;color:var(--muted);margin-top:2px;}
+table{width:100%;border-collapse:collapse;font-size:13px;}
+th{text-align:left;padding:7px 9px;color:var(--muted);font-weight:500;border-bottom:1px solid var(--border);font-size:11px;text-transform:uppercase;}
+td{padding:8px 9px;border-bottom:1px solid var(--border);}
+tr:last-child td{border-bottom:none;}
+tr:hover td{background:#fafafa;}
+.badge{display:inline-block;padding:2px 7px;border-radius:12px;font-size:11px;font-weight:700;}
+.bg{background:rgba(0,120,24,.12);color:#007818;}.by{background:rgba(245,166,35,.15);color:#9a6500;}.br{background:rgba(232,64,64,.12);color:#c02020;}
+.scale-bar{display:flex;gap:4px;margin:10px 0 4px;}
+.scale-seg{flex:1;height:14px;border-radius:3px;transition:all .3s;}
+.scale-labels{display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-bottom:4px;}
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:100;align-items:center;justify-content:center;}
+.modal-bg.open{display:flex;}
+.modal{background:#fff;border:1px solid var(--border);border-top:3px solid var(--orange);border-radius:12px;padding:22px;width:520px;max-width:96vw;max-height:92vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.12);}
+.modal h2{margin-bottom:14px;}
+.modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:14px;}
+.vid-placeholder{height:130px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;color:var(--muted);font-size:13px;cursor:pointer;border:2px dashed var(--border);border-radius:9px;background:#f9fafb;transition:all .2s;}
+.vid-placeholder:hover{border-color:var(--orange);color:var(--orange);}
+.sh{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
+.chip{display:inline-block;background:rgba(240,96,26,.08);color:var(--orange);border:1px solid rgba(240,96,26,.2);border-radius:20px;padding:2px 9px;font-size:11px;margin:2px;}
+.empty{color:var(--muted);font-size:13px;text-align:center;padding:20px;}
+.divider{border:none;border-top:1px solid var(--border);margin:12px 0;}
+.timer-big{font-size:22px;font-weight:800;color:var(--orange);font-variant-numeric:tabular-nums;letter-spacing:1px;}
+.live-dot{background:var(--danger);color:#fff;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700;animation:blink 1.2s infinite;}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+.flex{display:flex;align-items:center;gap:8px;}
+.mt{margin-top:10px;}
+.live-layout{display:grid;grid-template-columns:1fr 300px 300px;gap:12px;align-items:start;}
+@media(max-width:1000px){.live-layout{grid-template-columns:1fr 280px;}}
+@media(max-width:700px){.live-layout{grid-template-columns:1fr;}}
+.toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);padding:9px 22px;border-radius:8px;font-weight:700;font-size:13px;z-index:999;animation:fadeup .3s ease;white-space:nowrap;color:#fff;}
+@keyframes fadeup{from{opacity:0;transform:translateX(-50%) translateY(8px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+.tag-edit-block{background:#f9fafb;border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:8px;}
+.tag-edit-block input{margin-bottom:5px;}
+.tag-edit-block input:last-child{margin-bottom:0;}
+.export-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;}
+.export-box{background:#f9fafb;border:1px solid var(--border);border-radius:8px;padding:12px;}
+.export-box-title{font-size:12px;font-weight:700;margin-bottom:6px;}
+</style>
+</head>
+<body>
+<nav>
+  <div class="nav-brand">
+    <img src="https://www.envigadofc.co/wp-content/uploads/2019/12/Logotipo-Envigado-2.png" style="height:38px;width:auto;margin-right:10px" alt="EFC">
+    <div class="nav-title">Player Eval<span>Cantera de Héroes</span></div>
+  </div>
+  <div class="nav-links">
+    <button class="active" data-page="jugadores">Jugadores</button>
+    <button data-page="live">Sesión en Vivo</button>
+    <button data-page="historial">Historial</button>
+    <button data-page="dashboard">Dashboard</button>
+  </div>
+</nav>
+
+<!-- JUGADORES -->
+<div class="page active" id="pg-jugadores">
+  <div class="sh"><h2 style="margin:0">Plantilla EFC</h2>
+    <div class="flex">
+      <button class="btn btn-ghost btn-sm" onclick="openModal('modalData')" title="Exportar / Importar datos">💾 Backup</button>
+      <button class="btn btn-orange" onclick="openNewPlayer()">+ Nuevo Jugador</button>
+    </div>
+  </div>
+  <div class="player-list" id="playerList"></div>
+</div>
+
+<!-- LIVE -->
+<div class="page" id="pg-live">
+  <div class="card card-ol">
+    <div class="grid2" style="align-items:start;gap:16px">
+      <div><h3>Jugador</h3><select id="livePlayer" onchange="loadLivePlayer()"><option value="">— Seleccionar —</option></select></div>
+      <div>
+        <h3>Tiempos del Partido</h3>
+        <div style="display:flex;gap:8px;margin-bottom:10px">
+          <button class="btn-period" id="btn1T" onclick="startPeriod(1)">▶ 1er Tiempo</button>
+          <button class="btn-period" id="btn2T" onclick="startPeriod(2)">▶ 2do Tiempo</button>
+        </div>
+        <div style="display:flex;gap:20px;align-items:center">
+          <div><div style="font-size:10px;color:var(--muted);margin-bottom:2px">1ER TIEMPO</div><div class="timer-big" id="timer1">00:00</div></div>
+          <div style="color:var(--border);font-size:20px">|</div>
+          <div><div style="font-size:10px;color:var(--muted);margin-bottom:2px">2DO TIEMPO</div><div class="timer-big" id="timer2" style="color:var(--muted)">00:00</div></div>
+          <span id="liveDot" style="display:none" class="live-dot">● LIVE</span>
+        </div>
+        <div class="flex mt">
+          <button class="btn btn-ghost btn-sm" onclick="pausePeriod()">⏸ Pausar</button>
+          <button class="btn btn-ghost btn-sm" onclick="resetAll()">↺ Reset</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div id="liveMain" style="display:none">
+    <div class="live-layout">
+      <div>
+        <div class="card card-ol">
+          <div class="sh"><h2 style="margin:0">Acciones del Jugador</h2><span style="font-size:11px;color:var(--muted)">✅ Ejecutó &nbsp;|&nbsp; ❌ No ejecutó</span></div>
+          <div id="liveTagGrid"></div>
+        </div>
+      </div>
+      <div>
+        <div class="card">
+          <div class="sh">
+            <div><h2 style="margin:0">Registro</h2><span id="liveSummary" style="font-size:12px;color:var(--muted)"></span></div>
+            <button class="btn btn-warn btn-sm" onclick="openCloseSession()">Cerrar Sesión</button>
+          </div>
+          <div class="log-list" id="liveLog"></div>
+          <div class="empty" id="liveLogEmpty">Sin acciones aún</div>
+        </div>
+      </div>
+      <div>
+        <div class="card">
+          <h2 style="margin-bottom:12px">📈 Progreso en Vivo</h2>
+          <div id="liveChartsPanel"><div class="empty" style="padding:12px">Empieza a taggear para ver las gráficas</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- HISTORIAL -->
+<div class="page" id="pg-historial">
+  <div class="sh"><h2 style="margin:0">Historial de Sesiones</h2><select id="histFilter" onchange="renderHistorial()" style="width:180px"><option value="">Todos los jugadores</option></select></div>
+  <div class="card">
+    <table>
+      <thead><tr><th>Jugador</th><th>Fecha</th><th>Rival</th><th>Min</th><th>Acciones</th><th>Acierto</th><th></th></tr></thead>
+      <tbody id="histTable"></tbody>
+    </table>
+    <div class="empty" id="histEmpty" style="display:none">Sin sesiones registradas</div>
+  </div>
+</div>
+
+<!-- DASHBOARD -->
+<div class="page" id="pg-dashboard">
+  <div class="sh"><h2 style="margin:0">Dashboard de Evolución</h2><select id="dashPlayer" onchange="renderDashboard()" style="width:200px"><option value="">— Seleccionar jugador —</option></select></div>
+  <div id="dashContent" style="display:none">
+    <div class="grid3" style="margin-bottom:12px">
+      <div class="stat-box"><div class="val" id="dSess">0</div><div class="lbl">Sesiones</div></div>
+      <div class="stat-box"><div class="val" id="dAcierto">—</div><div class="lbl">% Acierto global</div></div>
+      <div class="stat-box"><div class="val" id="dCandidacy" style="color:var(--orange)">—/5</div><div class="lbl">Nivel de candidatura</div></div>
+    </div>
+    <div class="card card-ol">
+      <h3>Nivel de Candidatura al Profesional</h3>
+      <div class="scale-labels"><span>1 Iniciando</span><span>2 En proceso</span><span>3 Desarrollando</span><span>4 Consolidando</span><span>5 Candidato</span></div>
+      <div class="scale-bar" id="scaleBar">
+        <div class="scale-seg" style="background:#e84040"></div>
+        <div class="scale-seg" style="background:#f5a623"></div>
+        <div class="scale-seg" style="background:#c8c840"></div>
+        <div class="scale-seg" style="background:#90c840"></div>
+        <div class="scale-seg" style="background:#007818"></div>
+      </div>
+      <div id="candidacyLabel" style="font-size:13px;color:var(--muted);text-align:center;margin-top:4px">Sin datos suficientes</div>
+    </div>
+    <div class="card"><h2>% Acierto global por partido</h2><canvas id="aciertoChart" height="200"></canvas></div>
+    <div class="card">
+      <h2 style="margin-bottom:10px">Gráficas por Acción</h2>
+      <div id="actionSelectorWrap" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px"></div>
+      <div id="actionChartsWrap"></div>
+    </div>
+    <div class="card card-ol"><h3>Evaluación de Progreso</h3><div id="progressEval" style="font-size:14px;line-height:1.8"></div></div>
+    <div class="card">
+      <div class="sh" style="margin-bottom:12px"><h2 style="margin:0">📄 Exportar Informe</h2></div>
+      <div class="export-grid">
+        <div class="export-box">
+          <div class="export-box-title">Informe Completo</div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Todo el historial con candidatura</div>
+          <button class="btn btn-orange btn-sm" style="width:100%" onclick="exportPDF('completo')">⬇ Generar PDF</button>
+        </div>
+        <div class="export-box">
+          <div class="export-box-title">Por Mes</div>
+          <select id="exportMonthSel" style="width:100%;margin-bottom:8px;font-size:12px"><option value="">Seleccionar mes...</option></select>
+          <button class="btn btn-ghost btn-sm" style="width:100%" onclick="exportPDF('mes')">⬇ Generar PDF</button>
+        </div>
+        <div class="export-box">
+          <div class="export-box-title">Por Partido</div>
+          <select id="exportSessionSel" style="width:100%;margin-bottom:8px;font-size:12px"><option value="">Seleccionar partido...</option></select>
+          <button class="btn btn-ghost btn-sm" style="width:100%" onclick="exportPDF('partido')">⬇ Generar PDF</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="empty" id="dashEmpty">Selecciona un jugador</div>
+</div>
+
+<!-- MODAL: Exportar/Importar -->
+<div class="modal-bg" id="modalData">
+  <div class="modal" style="width:480px">
+    <h2>📦 Exportar / Importar Datos</h2>
+    <div style="margin-bottom:16px">
+      <h3 style="margin-bottom:8px">Exportar</h3>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Descarga un archivo con todos tus jugadores y sesiones. Úsalo para hacer backup o para importar en otro dispositivo.</p>
+      <button class="btn btn-orange" onclick="exportData()">⬇ Descargar backup</button>
+    </div>
+    <hr class="divider">
+    <div>
+      <h3 style="margin-bottom:8px">Importar</h3>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Carga un archivo de backup para restaurar jugadores y sesiones. <strong>Esto reemplazará los datos actuales.</strong></p>
+      <input type="file" id="importFileInput" accept=".json" style="display:none" onchange="importData(this)">
+      <button class="btn btn-ghost" onclick="document.getElementById('importFileInput').click()">📂 Cargar archivo backup</button>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('modalData')">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Confirmación -->
+<div class="modal-bg" id="modalConfirm">
+  <div class="modal" style="width:380px">
+    <h2 id="confirmTitle">¿Confirmar?</h2>
+    <p id="confirmMsg" style="font-size:13px;color:var(--muted);margin-bottom:16px;line-height:1.6"></p>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('modalConfirm')">Cancelar</button>
+      <button class="btn" id="confirmOkBtn" style="background:var(--danger);color:#fff">Eliminar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Jugador -->
+<div class="modal-bg" id="modalPlayer">
+  <div class="modal">
+    <h2 id="mpTitle">Nuevo Jugador</h2>
+    <div class="grid2">
+      <div class="form-group"><label>Nombre</label><input id="mpName" placeholder="Nombre completo"></div>
+      <div class="form-group"><label>Posición</label><input id="mpPos" placeholder="Ej: Lateral derecho"></div>
+    </div>
+    <div class="form-group"><label>Número</label><input id="mpNum" type="number" placeholder="10" style="width:80px"></div>
+    <hr class="divider">
+    <h3>Acciones a evaluar</h3>
+    <div id="mpTagList" style="margin-bottom:10px"></div>
+    <div style="display:flex;flex-direction:column;gap:6px">
+      <input id="mpTagInput" placeholder="Nombre de la acción">
+      <input id="mpTagDescYes" placeholder="✅ ¿Qué significa ejecutarlo bien?">
+      <input id="mpTagDescNo" placeholder="❌ ¿Qué significa no ejecutarlo?" onkeydown="if(event.key==='Enter')addTagInput()">
+      <button class="btn btn-ghost btn-sm" style="align-self:flex-start" onclick="addTagInput()">+ Agregar acción</button>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('modalPlayer')">Cancelar</button>
+      <button class="btn btn-orange" onclick="savePlayer()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Cerrar Sesión -->
+<div class="modal-bg" id="modalSession">
+  <div class="modal">
+    <h2>Cerrar Sesión</h2>
+    <div id="scorePreview" style="background:#f9fafb;border:1px solid var(--border);border-radius:9px;padding:14px;margin-bottom:14px">
+      <h3 style="margin-bottom:10px">% Acierto por acción</h3>
+      <div id="scoreBreakdown"></div>
+      <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+        <span style="font-size:13px;font-weight:600">Acierto global</span>
+        <span id="scoreGlobal" style="font-size:22px;font-weight:800"></span>
+      </div>
+    </div>
+    <div class="form-group"><label>Rival / Partido</label><input id="msRival" placeholder="Ej: Nacional U20"></div>
+    <div class="form-group"><label>Minutos jugados</label><input id="msMin" type="number" placeholder="90" style="width:100px"></div>
+    <div class="form-group"><label>Observaciones</label><textarea id="msObs" rows="2" placeholder="Notas del analista..."></textarea></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('modalSession')">Cancelar</button>
+      <button class="btn btn-green" onclick="saveSession()">Guardar Sesión</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Detalle + Video -->
+<div class="modal-bg" id="modalDetail">
+  <div class="modal" style="width:640px;max-width:97vw">
+    <h2 id="mdTitle"></h2>
+    <div id="mdContent"></div>
+    <div style="background:#f9fafb;border:1px solid var(--border);border-radius:9px;padding:14px;margin-top:12px">
+      <h3 style="margin-bottom:10px">📹 Revisión en Video</h3>
+      <div id="mdVidPlaceholder" class="vid-placeholder" onclick="document.getElementById('mdVidInput').click()">
+        <div style="font-size:26px">🎬</div>
+        <div>Adjuntar grabación del partido</div>
+        <div style="font-size:11px;color:var(--muted)">MP4, MOV — procesado localmente</div>
+      </div>
+      <div id="mdVidWrap" style="display:none">
+        <div class="tl-wrap" id="mdTlWrap"><div class="tl-prog" id="mdTlProg"></div><div class="tl-marks" id="mdTlMarks"></div></div>
+        <div class="clip-box" style="margin-top:8px">
+          <video id="mdVideo" controls></video>
+          <div class="clip-controls">
+            <div style="font-size:11px;color:#aaa" id="clipLabel">Toca un timestamp del log para ver el clip</div>
+            <div class="clip-range-row">
+              <span style="white-space:nowrap">Default antes:</span>
+              <input type="range" id="clipBefore" min="1" max="30" value="5" oninput="updateClipRange()">
+              <span id="clipBeforeVal" style="min-width:26px">5s</span>
+              <span style="white-space:nowrap;margin-left:8px">Default después:</span>
+              <input type="range" id="clipAfter" min="1" max="30" value="5" oninput="updateClipRange()">
+              <span id="clipAfterVal" style="min-width:26px">5s</span>
+            </div>
+            <div style="display:flex;gap:6px">
+              <button class="btn btn-ghost btn-sm" id="clipReplayBtn" onclick="replayClip()" style="display:none;color:#fff;border-color:#444">↩ Replay</button>
+            </div>
+          </div>
+        </div>
+        <div style="margin-top:12px;padding:12px;background:#1a1a1a;border-radius:8px">
+          <div style="font-size:12px;font-weight:700;color:#ddd;margin-bottom:10px">🎬 Compilado por Acción</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px" id="compileActionBtns"></div>
+          <div id="compileStatus" style="font-size:12px;color:#aaa;margin-bottom:8px"></div>
+          <canvas id="compileCanvas" style="display:none"></canvas>
+          <div id="compileProgressWrap" style="display:none;margin-bottom:8px">
+            <div style="height:6px;background:#333;border-radius:3px;overflow:hidden">
+              <div id="compileProgressBar" style="height:100%;width:0%;background:#F0601A;border-radius:3px;transition:width .3s"></div>
+            </div>
+            <div id="compileProgressLabel" style="font-size:11px;color:#aaa;margin-top:4px;text-align:center"></div>
+          </div>
+          <div style="display:flex;gap:6px">
+            <button class="btn btn-sm" id="compilarBtn" onclick="startCompile()" style="background:#F0601A;color:#fff;display:none">⬇ Generar y Descargar</button>
+            <button class="btn btn-ghost btn-sm" id="cancelCompileBtn" onclick="cancelCompile()" style="display:none;color:#fff;border-color:#444">✕ Cancelar</button>
+          </div>
+        </div>
+        <div class="flex mt" style="gap:6px">
+          <label style="margin:0;white-space:nowrap;font-size:12px;color:var(--muted)">Offset (seg):</label>
+          <input id="mdOffset" type="number" value="0" style="width:78px" oninput="updateMdOffset()">
+          <span style="font-size:11px;color:var(--muted)">Diferencia entre cronómetro y video</span>
+        </div>
+      </div>
+      <input type="file" id="mdVidInput" accept="video/*" style="display:none" onchange="loadDetailVideo(this)">
+    </div>
+    <div class="modal-actions"><button class="btn btn-ghost" onclick="closeModal('modalDetail')">Cerrar</button></div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script>
+var players=JSON.parse(localStorage.getItem('efc_players')||'[]');
+var sessions=JSON.parse(localStorage.getItem('efc_sessions')||'[]');
+var editingId=null,tempTags=[],liveLog=[],liveCharts={};
+var period=0,secs1=0,secs2=0,int1=null,int2=null;
+var mdOffset=0,mdVidDur=0,currentSess=null,mdVideoSrc=null,mdVideoSessionId=null;
+var clipStartSecs=null,clipBeforeSecs=5,clipAfterSecs=5,clipLastBefore=5,clipLastAfter=5;
+var chartGlobal=null,actionCharts={},compileAborted=false;
+
+function save(){localStorage.setItem('efc_players',JSON.stringify(players));localStorage.setItem('efc_sessions',JSON.stringify(sessions));}
+function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2);}
+function ini(n){return n.split(' ').map(function(w){return w[0];}).join('').toUpperCase().slice(0,2);}
+var PCOLS=['#F0601A','#007818','#e84040','#f5a623','#8b5cf6','#06b6d4'];
+function pColor(id){var i=players.findIndex(function(p){return p.id===id;});return PCOLS[i%PCOLS.length]||PCOLS[0];}
+function fmt(s){s=Math.max(0,Math.round(s));return String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0');}
+function fmtDate(d){return new Date(d).toLocaleDateString('es-CO',{day:'2-digit',month:'short',year:'numeric'});}
+function colPct(p){return p>=90?'#007818':p>=70?'#9a6500':'#c02020';}
+function bdg(p){return p>=90?'bg':p>=70?'by':'br';}
+function tagLabel(t){return typeof t==='string'?t:t.label;}
+function tagDescYes(t){return typeof t==='string'?'':(t.descYes||'');}
+function tagDescNo(t){return typeof t==='string'?'':(t.descNo||'');}
+function esc(s){return (s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+function computeScores(log,tags){
+  var bt={};tags.forEach(function(t){bt[t]={yes:0,no:0};});
+  log.forEach(function(l){if(!bt[l.action])bt[l.action]={yes:0,no:0};if(l.result==='yes')bt[l.action].yes++;else bt[l.action].no++;});
+  var ty=0,tn=0;Object.values(bt).forEach(function(v){ty+=v.yes;tn+=v.no;});
+  return{byTag:bt,globalPct:ty+tn>0?Math.round(ty/(ty+tn)*100):null,totalYes:ty,totalNo:tn};
+}
+function candidacyScore(avg){
+  if(avg===null)return null;
+  if(avg>=90)return 5;if(avg>=75)return 4;if(avg>=60)return 3;if(avg>=45)return 2;return 1;
+}
+var CAND_NAMES=['','Iniciando','En proceso','Desarrollando','Consolidando','Candidato a ascenso'];
+var CAND_COLORS=['','#e84040','#f5a623','#c8c840','#90c840','#007818'];
+var CAND_DESC=['','Etapa inicial. Definir plan de trabajo individual.','En construcción. Requiere seguimiento intensivo.','Progreso claro. Trabajar las acciones más débiles.','Muy cerca. Mantener rendimiento y consolidar.','Listo para evaluar ascenso al equipo profesional.'];
+
+function toast(msg,color){color=color||'#007818';var t=document.createElement('div');t.className='toast';t.textContent=msg;t.style.background=color;document.body.appendChild(t);setTimeout(function(){t.remove();},2500);}
+
+/* NAV */
+document.querySelectorAll('nav button').forEach(function(btn){
+  btn.addEventListener('click',function(){
+    document.querySelectorAll('nav button').forEach(function(b){b.classList.remove('active');});
+    document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active');});
+    btn.classList.add('active');var pg=btn.dataset.page;
+    document.getElementById('pg-'+pg).classList.add('active');
+    if(pg==='jugadores')renderPlayers();
+    if(pg==='live')populateLiveSelect();
+    if(pg==='historial'){populateHistFilter();renderHistorial();}
+    if(pg==='dashboard')populateDashSelect();
+  });
+});
+
+/* CONFIRM */
+function showConfirm(title,msg,onOk){
+  document.getElementById('confirmTitle').textContent=title;
+  document.getElementById('confirmMsg').textContent=msg;
+  document.getElementById('confirmOkBtn').onclick=function(){closeModal('modalConfirm');onOk();};
+  openModal('modalConfirm');
+}
+
+/* TIMERS */
+function startPeriod(p){
+  clearInterval(int1);clearInterval(int2);
+  document.getElementById('liveDot').style.display='inline';
+  if(p===1){int1=setInterval(function(){secs1++;document.getElementById('timer1').textContent=fmt(secs1);},1000);period=1;document.getElementById('btn1T').classList.add('running');document.getElementById('btn2T').classList.remove('running');document.getElementById('timer1').style.color='var(--orange)';document.getElementById('timer2').style.color='var(--muted)';}
+  else{int2=setInterval(function(){secs2++;document.getElementById('timer2').textContent=fmt(secs2);},1000);period=2;document.getElementById('btn2T').classList.add('running');document.getElementById('btn1T').classList.remove('running');document.getElementById('timer2').style.color='var(--orange)';document.getElementById('timer1').style.color='var(--muted)';}
+}
+function pausePeriod(){clearInterval(int1);clearInterval(int2);document.getElementById('liveDot').style.display='none';document.getElementById('btn1T').classList.remove('running');document.getElementById('btn2T').classList.remove('running');}
+function resetAll(){pausePeriod();secs1=0;secs2=0;period=0;document.getElementById('timer1').textContent='00:00';document.getElementById('timer2').textContent='00:00';document.getElementById('timer1').style.color='var(--orange)';document.getElementById('timer2').style.color='var(--muted)';}
+function getCurrentTime(){if(period===1)return{secs:secs1,period:1,ts:fmt(secs1)};if(period===2)return{secs:secs2,period:2,ts:fmt(secs2)};return{secs:secs1,period:1,ts:fmt(secs1)};}
+
+/* JUGADORES */
+function renderPlayers(){
+  var el=document.getElementById('playerList');
+  if(!players.length){el.innerHTML='<div class="empty">No hay jugadores. Agrega el primero.</div>';return;}
+  el.innerHTML=players.map(function(p){
+    var chips=p.tags.slice(0,3).map(function(t){return '<span class="chip">'+tagLabel(t)+'</span>';}).join('');
+    if(p.tags.length>3)chips+='<span class="chip">+'+(p.tags.length-3)+'</span>';
+    return '<div class="player-card">'+
+      '<div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:8px">'+
+      '<div class="avatar" style="background:'+pColor(p.id)+'">'+ini(p.name)+'</div>'+
+      '<button onclick="deletePlayer(\''+p.id+'\')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:20px;line-height:1;padding:0">×</button></div>'+
+      '<div style="font-weight:700;font-size:14px;cursor:pointer" onclick="editPlayer(\''+p.id+'\')">'+p.name+'</div>'+
+      '<div style="font-size:12px;color:var(--muted);cursor:pointer" onclick="editPlayer(\''+p.id+'\')">'+(p.position||'—')+(p.number?' · #'+p.number:'')+'</div>'+
+      '<div style="margin-top:7px;display:flex;flex-wrap:wrap;gap:3px;cursor:pointer" onclick="editPlayer(\''+p.id+'\')">'+chips+'</div></div>';
+  }).join('');
+}
+function openNewPlayer(){editingId=null;tempTags=[];['mpName','mpPos','mpNum','mpTagInput','mpTagDescYes','mpTagDescNo'].forEach(function(i){document.getElementById(i).value='';});document.getElementById('mpTitle').textContent='Nuevo Jugador';renderTempTags();openModal('modalPlayer');}
+function editPlayer(id){var p=players.find(function(x){return x.id===id;});if(!p)return;editingId=id;tempTags=p.tags.map(function(t){return typeof t==='string'?{label:t,descYes:'',descNo:''}:{label:t.label,descYes:t.descYes||'',descNo:t.descNo||''};});document.getElementById('mpName').value=p.name;document.getElementById('mpPos').value=p.position||'';document.getElementById('mpNum').value=p.number||'';['mpTagInput','mpTagDescYes','mpTagDescNo'].forEach(function(i){document.getElementById(i).value='';});document.getElementById('mpTitle').textContent='Editar Jugador';renderTempTags();openModal('modalPlayer');}
+function addTagInput(){var v=document.getElementById('mpTagInput').value.trim();if(!v)return;tempTags.push({label:v,descYes:document.getElementById('mpTagDescYes').value.trim(),descNo:document.getElementById('mpTagDescNo').value.trim()});['mpTagInput','mpTagDescYes','mpTagDescNo'].forEach(function(i){document.getElementById(i).value='';});renderTempTags();}
+function renderTempTags(){
+  document.getElementById('mpTagList').innerHTML=tempTags.map(function(t,i){
+    return '<div class="tag-edit-block">'+
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">'+
+      '<span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase">Acción '+(i+1)+'</span>'+
+      '<span style="cursor:pointer;color:var(--muted);font-size:18px;line-height:1" onclick="removeTag('+i+')">×</span></div>'+
+      '<input placeholder="Nombre" value="'+esc(t.label)+'" style="font-weight:600;margin-bottom:5px" onchange="updateTag('+i+',\'label\',this.value)">'+
+      '<input placeholder="✅ Ejecutar bien significa..." value="'+esc(t.descYes)+'" style="font-size:12px;border-color:rgba(0,120,24,.3);color:#007818;margin-bottom:5px" onchange="updateTag('+i+',\'descYes\',this.value)">'+
+      '<input placeholder="❌ No ejecutar significa..." value="'+esc(t.descNo)+'" style="font-size:12px;border-color:rgba(232,64,64,.3);color:#c02020" onchange="updateTag('+i+',\'descNo\',this.value)">'+
+      '</div>';
+  }).join('');
+}
+function updateTag(i,field,val){if(tempTags[i])tempTags[i][field]=val;}
+function removeTag(i){tempTags.splice(i,1);renderTempTags();}
+function savePlayer(){
+  var name=document.getElementById('mpName').value.trim();if(!name){toast('Nombre requerido','#e84040');return;}
+  var tags=tempTags.map(function(t){return{label:t.label||'',descYes:t.descYes||'',descNo:t.descNo||''};});
+  if(editingId){var p=players.find(function(x){return x.id===editingId;});p.name=name;p.position=document.getElementById('mpPos').value.trim();p.number=document.getElementById('mpNum').value;p.tags=tags;}
+  else players.push({id:uid(),name:name,position:document.getElementById('mpPos').value.trim(),number:document.getElementById('mpNum').value,tags:tags});
+  save();closeModal('modalPlayer');renderPlayers();
+}
+function deletePlayer(id){
+  var p=players.find(function(x){return x.id===id;});if(!p)return;
+  var sc=sessions.filter(function(s){return s.playerId===id;}).length;
+  showConfirm('Eliminar jugador','Se eliminará el perfil de '+p.name+'.'+(sc>0?' Sus '+sc+' sesiones se conservarán.':''),function(){players=players.filter(function(x){return x.id!==id;});save();renderPlayers();});
+}
+
+/* LIVE */
+function populateLiveSelect(){document.getElementById('livePlayer').innerHTML='<option value="">— Seleccionar —</option>'+players.map(function(p){return '<option value="'+p.id+'">'+p.name+'</option>';}).join('');}
+function loadLivePlayer(){
+  var id=document.getElementById('livePlayer').value;
+  document.getElementById('liveMain').style.display=id?'block':'none';
+  if(!id)return;
+  liveLog=[];Object.values(liveCharts).forEach(function(c){try{c.destroy();}catch(e){}});liveCharts={};
+  document.getElementById('liveChartsPanel').innerHTML='<div class="empty" style="padding:12px">Empieza a taggear para ver las gráficas</div>';
+  renderLiveLog();renderTagGrid(players.find(function(x){return x.id===id;}).tags);
+}
+function renderTagGrid(tags){
+  var g=document.getElementById('liveTagGrid');
+  if(!tags.length){g.innerHTML='<div class="empty">Sin acciones. Edita el jugador.</div>';return;}
+  g.innerHTML=tags.map(function(t){
+    var lbl=tagLabel(t),dy=tagDescYes(t),dn=tagDescNo(t);
+    var k=lbl.replace(/[^a-z0-9]/gi,'_');
+    var safe=lbl.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+    var descRow=(dy||dn)?'<div class="tag-desc-row">'+(dy?'<div class="tag-desc-yes">'+esc(dy)+'</div>':'<div style="flex:1"></div>')+(dn?'<div class="tag-desc-no">'+esc(dn)+'</div>':'<div style="flex:1"></div>')+'</div>':'';
+    return '<div class="tag-pair"><div class="tag-pair-label">⚡ '+lbl+'</div><div class="tag-btns"><button class="tb-y" onclick="tagAction(\''+safe+'\',\'yes\',this)">✅ Ejecutó</button><button class="tb-n" onclick="tagAction(\''+safe+'\',\'no\',this)">❌ No ejecutó</button></div>'+descRow+'<div class="pc" id="c_'+k+'">0 registros</div></div>';
+  }).join('');
+}
+function tagAction(action,result,btn){
+  var cur=getCurrentTime();
+  liveLog.unshift({id:uid(),action:action,result:result,ts:cur.ts,secs:cur.secs,period:cur.period});
+  btn.style.opacity='.45';setTimeout(function(){btn.style.opacity='1';},180);
+  var k=action.replace(/[^a-z0-9]/gi,'_');
+  var cnt=liveLog.filter(function(l){return l.action===action;}).length;
+  var el=document.getElementById('c_'+k);if(el)el.textContent=cnt+' registro'+(cnt!==1?'s':'');
+  renderLiveLog();updateLiveSummary();renderLiveCharts();
+}
+function updateLiveSummary(){
+  var sc=computeScores(liveLog,[]),el=document.getElementById('liveSummary');
+  if(sc.globalPct===null){el.textContent='';return;}
+  el.innerHTML='Acierto: <strong style="color:'+colPct(sc.globalPct)+'">'+sc.globalPct+'%</strong> ('+sc.totalYes+'✅ '+sc.totalNo+'❌)';
+}
+function renderLiveLog(){
+  var el=document.getElementById('liveLog'),em=document.getElementById('liveLogEmpty');
+  if(!liveLog.length){el.innerHTML='';em.style.display='block';return;}
+  em.style.display='none';
+  el.innerHTML=liveLog.map(function(l){
+    return '<div class="log-item"><span class="log-ts">⏱'+l.ts+'</span><span class="log-period">'+l.period+'T</span><span class="log-icon">'+(l.result==='yes'?'✅':'❌')+'</span><span class="log-act">'+l.action+'</span><span class="log-del" onclick="delLog(\''+l.id+'\')">×</span></div>';
+  }).join('');
+}
+function delLog(id){
+  liveLog=liveLog.filter(function(x){return x.id!==id;});
+  Object.values(liveCharts).forEach(function(c){try{c.destroy();}catch(e){}});liveCharts={};
+  document.getElementById('liveChartsPanel').innerHTML='<div class="empty" style="padding:12px">Empieza a taggear para ver las gráficas</div>';
+  renderLiveLog();updateLiveSummary();renderLiveCharts();
+}
+
+/* LIVE CHARTS */
+function renderLiveCharts(){
+  var panel=document.getElementById('liveChartsPanel');
+  if(!liveLog.length){panel.innerHTML='<div class="empty" style="padding:12px">Empieza a taggear para ver las gráficas</div>';Object.values(liveCharts).forEach(function(c){try{c.destroy();}catch(e){}});liveCharts={};return;}
+  var actions={};
+  var chrono=[].concat(liveLog).reverse();
+  chrono.forEach(function(l){
+    if(!actions[l.action])actions[l.action]={yes:0,no:0,history:[],results:[]};
+    if(l.result==='yes')actions[l.action].yes++;else actions[l.action].no++;
+    var tot=actions[l.action].yes+actions[l.action].no;
+    actions[l.action].history.push(Math.round(actions[l.action].yes/tot*100));
+    actions[l.action].results.push(l.result);
+  });
+  Object.keys(liveCharts).forEach(function(lbl){if(!actions[lbl]){try{liveCharts[lbl].destroy();}catch(e){}delete liveCharts[lbl];var w=document.getElementById('wrap_lc_'+lbl.replace(/[^a-z0-9]/gi,'_'));if(w)w.remove();}});
+  if(panel.querySelector('.empty'))panel.innerHTML='';
+  Object.keys(actions).forEach(function(label){
+    var entry=actions[label],history=entry.history,results=entry.results,last=history[history.length-1];
+    var cid='lc_'+label.replace(/[^a-z0-9]/gi,'_'),wrapId='wrap_'+cid;
+    var ptColors=results.map(function(r){return r==='yes'?'#007818':'#e84040';});
+    if(liveCharts[label]){
+      var ch=liveCharts[label];ch.data.labels=history.map(function(_,i){return i+1;});ch.data.datasets[0].data=history;ch.data.datasets[0].pointBackgroundColor=ptColors;ch.update('none');
+      var pe=document.getElementById('pct_'+cid);if(pe){pe.textContent=last+'%';pe.style.color=last>=90?'#007818':last>=70?'#9a6500':'#c02020';}
+    } else if(!document.getElementById(wrapId)){
+      var div=document.createElement('div');div.id=wrapId;div.style.cssText='margin-bottom:16px;';
+      var hdr=document.createElement('div');hdr.style.cssText='display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;';
+      var lblEl=document.createElement('span');lblEl.style.cssText='font-size:11px;font-weight:700;color:var(--text);';lblEl.textContent='⚡ '+label;
+      var pctEl=document.createElement('span');pctEl.id='pct_'+cid;pctEl.style.cssText='font-size:13px;font-weight:800;color:'+(last>=90?'#007818':last>=70?'#9a6500':'#c02020')+';';pctEl.textContent=last+'%';
+      var leg=document.createElement('div');leg.style.cssText='display:flex;gap:8px;font-size:10px;color:var(--muted);align-items:center;margin-bottom:4px;';
+      leg.innerHTML='<span style="display:flex;align-items:center;gap:3px"><span style="width:8px;height:8px;border-radius:50%;background:#007818;display:inline-block"></span>Ejecutó</span><span style="display:flex;align-items:center;gap:3px"><span style="width:8px;height:8px;border-radius:50%;background:#e84040;display:inline-block"></span>No ejecutó</span>';
+      hdr.appendChild(lblEl);hdr.appendChild(pctEl);div.appendChild(hdr);div.appendChild(leg);
+      var cvs=document.createElement('canvas');cvs.id=cid;cvs.style.height='160px';div.appendChild(cvs);panel.appendChild(div);
+      liveCharts[label]=new Chart(cvs,{type:'line',data:{labels:history.map(function(_,i){return i+1;}),datasets:[{data:history,borderColor:'#1a1f26',backgroundColor:'rgba(26,31,38,.04)',borderWidth:2,tension:.3,fill:true,pointBackgroundColor:ptColors,pointBorderColor:'#fff',pointBorderWidth:1.5,pointRadius:5,pointHoverRadius:7}]},options:{responsive:true,animation:{duration:250},scales:{y:{min:0,max:100,ticks:{stepSize:25,values:[0,25,50,75,100],callback:function(v){return v+'%';},color:'#6b7a8a',font:{size:10}},grid:{color:'rgba(0,0,0,.06)'}},x:{ticks:{color:'#6b7a8a',font:{size:9}},grid:{display:false}}},plugins:{legend:{display:false},tooltip:{callbacks:{label:function(ctx){var r=results[ctx.dataIndex];return (r==='yes'?'✅ Ejecutó':'❌ No ejecutó')+' — '+ctx.raw+'%';}}}}}}); 
+    }
+  });
+}
+
+function openCloseSession(){
+  var pid=document.getElementById('livePlayer').value;if(!pid)return;
+  var p=players.find(function(x){return x.id===pid;});
+  var labels=p.tags.map(tagLabel);var sc=computeScores(liveLog,labels);
+  var col=function(pct){return pct>=90?'#007818':pct>=70?'#9a6500':'#c02020';};
+  document.getElementById('scoreBreakdown').innerHTML=labels.map(function(t){var d=sc.byTag[t]||{yes:0,no:0};var tot=d.yes+d.no;var pct=tot>0?Math.round(d.yes/tot*100):null;var c=pct!==null?col(pct):'var(--muted)';return '<div style="margin-bottom:9px"><div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:2px"><span>'+t+'</span><span style="font-weight:700;color:'+c+'">'+(pct!==null?pct+'%':'—')+' <span style="font-size:11px;color:var(--muted)">('+d.yes+'✅ '+d.no+'❌)</span></span></div><div class="pbar"><div class="pbar-fill" style="width:'+(pct||0)+'%;background:'+(pct!==null?col(pct):'var(--border)')+'"></div></div></div>';}).join('')||'<div class="empty">Sin acciones</div>';
+  document.getElementById('scoreGlobal').style.color=sc.globalPct!==null?col(sc.globalPct):'var(--muted)';
+  document.getElementById('scoreGlobal').textContent=sc.globalPct!==null?sc.globalPct+'%':'—';
+  ['msRival','msObs'].forEach(function(i){document.getElementById(i).value='';});document.getElementById('msMin').value='';
+  openModal('modalSession');
+}
+function saveSession(){
+  var pid=document.getElementById('livePlayer').value;if(!pid)return;
+  var p=players.find(function(x){return x.id===pid;});
+  var labels=p.tags.map(tagLabel);var sc=computeScores(liveLog,labels);
+  sessions.push({id:uid(),playerId:pid,playerName:p.name,date:new Date().toISOString(),rival:document.getElementById('msRival').value.trim()||'—',minutes:parseInt(document.getElementById('msMin').value)||0,obs:document.getElementById('msObs').value.trim(),log:[].concat(liveLog),scores:{byTag:sc.byTag,globalPct:sc.globalPct},tagSnapshot:p.tags.map(function(t){return typeof t==='string'?{label:t,descYes:'',descNo:''}:{label:t.label,descYes:t.descYes||'',descNo:t.descNo||''};})});
+  save();closeModal('modalSession');liveLog=[];Object.values(liveCharts).forEach(function(c){try{c.destroy();}catch(e){}});liveCharts={};
+  document.getElementById('liveChartsPanel').innerHTML='<div class="empty" style="padding:12px">Empieza a taggear para ver las gráficas</div>';
+  renderLiveLog();updateLiveSummary();resetAll();
+  document.getElementById('livePlayer').value='';document.getElementById('liveMain').style.display='none';
+  toast('✅ Sesión guardada','#007818');
+}
+
+/* HISTORIAL */
+function populateHistFilter(){var sel=document.getElementById('histFilter'),cur=sel.value;sel.innerHTML='<option value="">Todos los jugadores</option>'+players.map(function(p){return '<option value="'+p.id+'">'+p.name+'</option>';}).join('');sel.value=cur;}
+function renderHistorial(){
+  var filt=document.getElementById('histFilter').value;
+  var list=(filt?sessions.filter(function(s){return s.playerId===filt;}):sessions).slice().sort(function(a,b){return new Date(b.date)-new Date(a.date);});
+  var tb=document.getElementById('histTable'),em=document.getElementById('histEmpty');
+  if(!list.length){tb.innerHTML='';em.style.display='block';return;}
+  em.style.display='none';
+  tb.innerHTML=list.map(function(s){var pct=s.scores&&s.scores.globalPct!=null?s.scores.globalPct:null;return '<tr><td><strong>'+s.playerName+'</strong></td><td>'+fmtDate(s.date)+'</td><td>'+s.rival+'</td><td>'+s.minutes+"'</td><td style=\"color:var(--muted)\">"+s.log.length+'</td><td>'+(pct!=null?'<span class="badge '+bdg(pct)+'">'+pct+'%</span>':'—')+'</td><td style="white-space:nowrap"><button class="btn btn-ghost btn-sm" onclick="openDetail(\''+s.id+'\')" style="margin-right:4px">Ver/Video</button><button class="btn btn-sm" onclick="deleteSession(\''+s.id+'\')" style="background:rgba(232,64,64,.08);border:1px solid rgba(232,64,64,.2);color:#c02020">✕</button></td></tr>';}).join('');
+}
+function deleteSession(id){var s=sessions.find(function(x){return x.id===id;});if(!s)return;showConfirm('Eliminar sesión','Sesión de '+s.playerName+' vs '+s.rival+' ('+fmtDate(s.date)+'). No se puede deshacer.',function(){sessions=sessions.filter(function(x){return x.id!==id;});save();renderHistorial();});}
+
+/* DETAIL + VIDEO */
+function openDetail(sid){
+  currentSess=sessions.find(function(x){return x.id===sid;});if(!currentSess)return;
+  var s=currentSess,p=players.find(function(x){return x.id===s.playerId;});
+  var labels=(p?p.tags:[]).map(tagLabel);var sc=s.scores||computeScores(s.log,labels);
+  var col=function(pct){return pct>=90?'#007818':pct>=70?'#9a6500':'#c02020';};
+  var breakdown=labels.map(function(t){var d=sc.byTag[t]||{yes:0,no:0};var tot=d.yes+d.no;var pct=tot>0?Math.round(d.yes/tot*100):null;var c=pct!==null?col(pct):'var(--muted)';return '<div style="margin-bottom:8px"><div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:2px"><span>'+t+'</span><span style="color:'+c+';font-weight:700">'+(pct!==null?pct+'%':'—')+' <span style="font-size:11px;color:var(--muted)">('+d.yes+'✅ '+d.no+'❌)</span></span></div><div class="pbar"><div class="pbar-fill" style="width:'+(pct||0)+'%;background:'+(pct!==null?col(pct):'var(--border)')+'"></div></div></div>';}).join('');
+  var logHtml=s.log.map(function(l){return '<div class="log-item"><span class="log-ts click" onclick="playClipFromRow('+l.secs+',this)">⏱'+l.ts+'</span><span class="log-period">'+l.period+'T</span><span class="log-icon">'+(l.result==='yes'?'✅':'❌')+'</span><span class="log-act">'+l.action+'</span><span class="clip-timing"><input type="number" value="'+clipBeforeSecs+'" min="1" max="60" class="cb-in">s<span style="color:var(--border);margin:0 2px">|</span><input type="number" value="'+clipAfterSecs+'" min="1" max="60" class="ca-in">s</span></div>';}).join('')||'<div class="empty">Vacío</div>';
+  document.getElementById('mdTitle').textContent=s.playerName+' · '+s.rival;
+  document.getElementById('mdContent').innerHTML='<div class="grid2" style="margin-bottom:10px"><div class="stat-box"><div class="val">'+s.minutes+"'</div><div class=\"lbl\">Minutos</div></div><div class=\"stat-box\"><div class=\"val\" style=\"color:"+(sc.globalPct!=null?col(sc.globalPct):'var(--muted)')+'">'+( sc.globalPct!=null?sc.globalPct+'%':'—')+'</div><div class="lbl">Acierto global</div></div></div><div style="font-size:12px;color:var(--muted);margin-bottom:10px">📅 '+new Date(s.date).toLocaleString('es-CO')+'</div>'+(s.obs?'<div style="background:#f9fafb;border-radius:7px;padding:9px;font-size:13px;margin-bottom:10px;border:1px solid var(--border)">'+s.obs+'</div>':'')+'<h3 style="margin-bottom:8px">Acierto por acción</h3>'+(breakdown||'<div class="empty">Sin datos</div>')+'<h3 style="margin:12px 0 7px">Log — toca ⏱ para clip</h3><div class="log-list" style="max-height:180px">'+logHtml+'</div>';
+  var sameSession=(mdVideoSessionId===sid)&&mdVideoSrc;
+  mdOffset=0;document.getElementById('mdOffset').value=0;
+  if(!sameSession){
+    mdVidDur=0;mdVideoSrc=null;mdVideoSessionId=null;
+    document.getElementById('mdVidPlaceholder').style.display='flex';document.getElementById('mdVidWrap').style.display='none';
+    document.getElementById('clipReplayBtn').style.display='none';document.getElementById('clipLabel').textContent='Toca un timestamp del log para ver el clip';
+    var vid=document.getElementById('mdVideo');vid.pause();vid.removeAttribute('src');vid.load();
+    document.getElementById('mdTlMarks').innerHTML='';document.getElementById('mdTlProg').style.width='0%';
+    document.getElementById('compileActionBtns').innerHTML='';document.getElementById('compileStatus').textContent='';document.getElementById('compilarBtn').style.display='none';
+  }else{renderDetailTimeline();}
+  mdVideoSessionId=sid;openModal('modalDetail');
+}
+function loadDetailVideo(input){
+  var file=input.files[0];if(!file)return;
+  if(mdVideoSrc)URL.revokeObjectURL(mdVideoSrc);
+  mdVideoSrc=URL.createObjectURL(file);
+  var vid=document.getElementById('mdVideo');vid.src=mdVideoSrc;
+  document.getElementById('mdVidPlaceholder').style.display='none';document.getElementById('mdVidWrap').style.display='block';
+  vid.addEventListener('loadedmetadata',function(){mdVidDur=vid.duration;renderDetailTimeline();buildCompileButtons();});
+  vid.addEventListener('timeupdate',function(){if(mdVidDur>0)document.getElementById('mdTlProg').style.width=(vid.currentTime/mdVidDur*100)+'%';});
+  input.value='';
+}
+function updateMdOffset(){mdOffset=parseFloat(document.getElementById('mdOffset').value)||0;renderDetailTimeline();}
+function renderDetailTimeline(){
+  var wrap=document.getElementById('mdTlMarks');wrap.innerHTML='';if(!mdVidDur||!currentSess)return;
+  currentSess.log.forEach(function(l){var adj=l.secs+mdOffset,pct=Math.min(100,Math.max(0,(adj/mdVidDur)*100));var dot=document.createElement('div');Object.assign(dot.style,{position:'absolute',left:pct+'%',top:'3px',bottom:'3px',width:'4px',borderRadius:'2px',background:l.result==='yes'?'#007818':'#e84040',cursor:'pointer',transform:'translateX(-50%)'});dot.onclick=function(){playClip(l.secs,clipBeforeSecs,clipAfterSecs);};wrap.appendChild(dot);});
+}
+document.getElementById('mdTlWrap').addEventListener('click',function(e){var rect=e.currentTarget.getBoundingClientRect(),vid=document.getElementById('mdVideo');if(vid.src&&mdVidDur)vid.currentTime=((e.clientX-rect.left)/rect.width)*mdVidDur;});
+function playClip(secs,before,after){
+  clipStartSecs=secs;clipLastBefore=before;clipLastAfter=after;
+  var vid=document.getElementById('mdVideo');if(!vid.src){toast('Primero adjunta el video','#e84040');return;}
+  var start=Math.max(0,secs+mdOffset-before),end=secs+mdOffset+after;
+  document.getElementById('clipLabel').textContent='Clip: '+fmt(secs)+' ('+before+'s antes · '+after+'s después)';
+  document.getElementById('clipReplayBtn').style.display='inline-flex';
+  vid.currentTime=start;vid.play();
+  var stopAt=function(){if(vid.currentTime>=end){vid.pause();vid.removeEventListener('timeupdate',stopAt);}};
+  vid.addEventListener('timeupdate',stopAt);
+}
+function playClipFromRow(secs,el){var row=el.closest('.log-item');var before=parseInt(row.querySelector('.cb-in').value)||clipBeforeSecs;var after=parseInt(row.querySelector('.ca-in').value)||clipAfterSecs;playClip(secs,before,after);}
+function replayClip(){if(clipStartSecs!==null)playClip(clipStartSecs,clipLastBefore,clipLastAfter);}
+function updateClipRange(){clipBeforeSecs=parseInt(document.getElementById('clipBefore').value)||5;clipAfterSecs=parseInt(document.getElementById('clipAfter').value)||5;document.getElementById('clipBeforeVal').textContent=clipBeforeSecs+'s';document.getElementById('clipAfterVal').textContent=clipAfterSecs+'s';}
+
+/* COMPILADO */
+function buildCompileButtons(){
+  if(!currentSess)return;
+  var actions={};currentSess.log.forEach(function(l){actions[l.action]=(actions[l.action]||0)+1;});
+  var wrap=document.getElementById('compileActionBtns');wrap.innerHTML='';document.getElementById('compilarBtn').style.display='none';document.getElementById('compileStatus').textContent='';
+  Object.keys(actions).forEach(function(action){
+    var btn=document.createElement('button');btn.className='btn btn-sm';btn.style.cssText='background:#2a2a2a;border:1px solid #444;color:#ddd;border-radius:20px;font-size:11px;';
+    btn.innerHTML=action+' <span style="color:#F0601A;font-weight:700">'+actions[action]+'</span>';btn.dataset.action=action;
+    btn.addEventListener('click',function(){wrap.querySelectorAll('button').forEach(function(b){b.style.background='#2a2a2a';b.style.borderColor='#444';b.style.color='#ddd';});btn.style.background='#3a1a0a';btn.style.borderColor='#F0601A';btn.style.color='#F0601A';document.getElementById('compilarBtn').style.display='inline-flex';document.getElementById('compilarBtn').dataset.action=action;document.getElementById('compileStatus').textContent=actions[action]+' clips · aprox. '+actions[action]*(clipBeforeSecs+clipAfterSecs)+'s';});
+    wrap.appendChild(btn);
+  });
+}
+function startCompile(){
+  var action=document.getElementById('compilarBtn').dataset.action;if(!action||!currentSess)return;
+  var vid=document.getElementById('mdVideo');if(!vid.src){toast('Primero adjunta el video','#e84040');return;}
+  var clips=currentSess.log.filter(function(l){return l.action===action;}).slice().reverse();if(!clips.length)return;
+  compileAborted=false;document.getElementById('compilarBtn').style.display='none';document.getElementById('cancelCompileBtn').style.display='inline-flex';document.getElementById('compileProgressWrap').style.display='block';document.getElementById('compileProgressBar').style.width='0%';document.getElementById('compileStatus').textContent='Preparando...';
+  var canvas=document.getElementById('compileCanvas');canvas.width=vid.videoWidth||1280;canvas.height=vid.videoHeight||720;
+  var ctx=canvas.getContext('2d'),stream=canvas.captureStream(30);
+  var mimeType='';var candidates=['video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm','video/mp4'];
+  for(var i=0;i<candidates.length;i++){if(MediaRecorder.isTypeSupported(candidates[i])){mimeType=candidates[i];break;}}
+  var recorder=new MediaRecorder(stream,mimeType?{mimeType:mimeType}:{}),chunks=[];
+  recorder.ondataavailable=function(e){if(e.data.size>0)chunks.push(e.data);};
+  recorder.onstop=function(){if(compileAborted){resetCompileUI();return;}var blob=new Blob(chunks,{type:mimeType||'video/webm'});var url=URL.createObjectURL(blob);var a=document.createElement('a');a.href=url;a.download=(currentSess.playerName+'_'+action).replace(/\s+/g,'_')+'.webm';a.click();setTimeout(function(){URL.revokeObjectURL(url);},3000);document.getElementById('compileStatus').textContent='✅ Descargado';resetCompileUI();};
+  recorder.start();var frameLoop=null;
+  function drawLoop(){if(!compileAborted){ctx.drawImage(vid,0,0,canvas.width,canvas.height);frameLoop=requestAnimationFrame(drawLoop);}}drawLoop();
+  var clipIndex=0;
+  function playNextClip(){
+    if(compileAborted||clipIndex>=clips.length){cancelAnimationFrame(frameLoop);recorder.stop();return;}
+    document.getElementById('compileProgressBar').style.width=Math.round((clipIndex/clips.length)*100)+'%';
+    document.getElementById('compileProgressLabel').textContent='Clip '+(clipIndex+1)+' de '+clips.length;
+    var secs=clips[clipIndex].secs,start=Math.max(0,secs+mdOffset-clipBeforeSecs),end=secs+mdOffset+clipAfterSecs;
+    vid.currentTime=start;
+    vid.onseeked=function(){vid.onseeked=null;vid.play();vid.ontimeupdate=function(){if(compileAborted){vid.pause();vid.ontimeupdate=null;cancelAnimationFrame(frameLoop);recorder.stop();return;}if(vid.currentTime>=end){vid.pause();vid.ontimeupdate=null;clipIndex++;setTimeout(playNextClip,80);}};};
+  }playNextClip();
+}
+function cancelCompile(){compileAborted=true;var vid=document.getElementById('mdVideo');vid.pause();vid.ontimeupdate=null;document.getElementById('compileStatus').textContent='Cancelado.';resetCompileUI();}
+function resetCompileUI(){document.getElementById('cancelCompileBtn').style.display='none';document.getElementById('compileProgressWrap').style.display='none';document.getElementById('compileProgressBar').style.width='0%';document.getElementById('compilarBtn').style.display='inline-flex';}
+
+/* DASHBOARD */
+function populateDashSelect(){var sel=document.getElementById('dashPlayer'),cur=sel.value;sel.innerHTML='<option value="">— Seleccionar jugador —</option>'+players.map(function(p){return '<option value="'+p.id+'">'+p.name+'</option>';}).join('');sel.value=cur;if(cur)renderDashboard();}
+
+function showActionChart(lbl,entry,labels,opts){
+  var wrap=document.getElementById('actionChartsWrap');Object.values(actionCharts).forEach(function(c){try{c.destroy();}catch(e){}});actionCharts={};
+  var info=entry.info,data=entry.data;
+  var activeTag=info.active?'<span style="font-size:10px;background:rgba(0,120,24,.12);color:#007818;border-radius:4px;padding:1px 6px;margin-left:6px;font-weight:600">Activa</span>':'<span style="font-size:10px;background:rgba(100,100,100,.1);color:#6b7a8a;border-radius:4px;padding:1px 6px;margin-left:6px;font-weight:600">Retirada</span>';
+  var cid='ac_'+Math.random().toString(36).slice(2);
+  wrap.innerHTML='<h2 style="font-size:13px;display:flex;align-items:center;margin-bottom:12px">⚡ '+lbl+activeTag+'</h2><canvas id="'+cid+'" height="180"></canvas>';
+  setTimeout(function(){var el=document.getElementById(cid);if(!el)return;actionCharts[cid]=new Chart(el,{type:'line',data:{labels:labels,datasets:[{label:'% Acierto',data:data,borderColor:info.active?'#F0601A':'#9ca3af',backgroundColor:info.active?'rgba(240,96,26,.07)':'rgba(156,163,175,.07)',tension:.4,fill:true,pointRadius:5,pointHoverRadius:7,pointBackgroundColor:data.map(function(v){return v===null?'#6b7a8a':colPct(v);}),pointBorderColor:'#fff',pointBorderWidth:2}]},options:opts});},30);
+}
+
+function renderDashboard(){
+  var id=document.getElementById('dashPlayer').value;
+  var con=document.getElementById('dashContent'),em=document.getElementById('dashEmpty');
+  if(!id){con.style.display='none';em.style.display='block';em.textContent='Selecciona un jugador';return;}
+  var pSess=sessions.filter(function(s){return s.playerId===id;}).slice().sort(function(a,b){return new Date(a.date)-new Date(b.date);});
+  if(!pSess.length){con.style.display='none';em.style.display='block';em.textContent='Sin sesiones aún.';return;}
+  em.style.display='none';con.style.display='block';
+
+  // Populate export dropdowns
+  var sortedDesc=pSess.slice().sort(function(a,b){return new Date(b.date)-new Date(a.date);});
+  var selP=document.getElementById('exportSessionSel');
+  selP.innerHTML='<option value="">Seleccionar partido...</option>';
+  sortedDesc.forEach(function(s){var o=document.createElement('option');o.value=s.id;o.textContent=fmtDate(s.date)+' · '+s.rival;selP.appendChild(o);});
+  var monthsSeen={},monthList=[];
+  sortedDesc.forEach(function(s){var k=new Date(s.date).toLocaleDateString('es-CO',{year:'numeric',month:'long'});if(!monthsSeen[k]){monthsSeen[k]=true;monthList.push(k);}});
+  var selM=document.getElementById('exportMonthSel');
+  selM.innerHTML='<option value="">Seleccionar mes...</option>';
+  monthList.forEach(function(m){var o=document.createElement('option');o.value=m;o.textContent=m;selM.appendChild(o);});
+
+  var p=players.find(function(x){return x.id===id;});
+  var pcts=pSess.map(function(s){return s.scores&&s.scores.globalPct!=null?s.scores.globalPct:null;}).filter(function(x){return x!=null;});
+  var avgAc=pcts.length?Math.round(pcts.reduce(function(a,b){return a+b;},0)/pcts.length):null;
+  var cScore=candidacyScore(avgAc);
+  document.getElementById('dSess').textContent=pSess.length;
+  document.getElementById('dAcierto').textContent=avgAc!==null?avgAc+'%':'—';
+  document.getElementById('dAcierto').style.color=avgAc!==null?colPct(avgAc):'var(--muted)';
+  document.getElementById('dCandidacy').textContent=cScore!==null?cScore+'/5':'—/5';
+  document.getElementById('dCandidacy').style.color=cScore!==null?CAND_COLORS[cScore]:'var(--muted)';
+  var segs=document.querySelectorAll('#scaleBar .scale-seg');
+  segs.forEach(function(s,i){s.style.opacity=cScore!==null&&i<cScore?'1':'.2';s.style.transform=cScore!==null&&i+1===cScore?'scaleY(1.4)':'scaleY(1)';});
+  document.getElementById('candidacyLabel').textContent=cScore!==null?'Nivel '+cScore+' — '+CAND_NAMES[cScore]:'Sin datos suficientes';
+  document.getElementById('candidacyLabel').style.color=cScore!==null?CAND_COLORS[cScore]:'var(--muted)';
+  var labels=pSess.map(function(s){return fmtDate(s.date);});
+  var chartOpts={responsive:true,scales:{y:{min:0,max:100,ticks:{callback:function(v){return v+'%';},color:'#6b7a8a'},grid:{color:'rgba(0,0,0,.05)'}},x:{ticks:{color:'#6b7a8a'},grid:{color:'rgba(0,0,0,.05)'}}},plugins:{legend:{labels:{color:'#1a1f26'}},tooltip:{callbacks:{label:function(ctx){return ctx.raw!==null?ctx.raw+'%':'Sin datos';}}}}};
+  if(chartGlobal)chartGlobal.destroy();
+  chartGlobal=new Chart(document.getElementById('aciertoChart'),{type:'line',data:{labels:labels,datasets:[{label:'% Acierto global',data:pSess.map(function(s){return s.scores&&s.scores.globalPct!=null?s.scores.globalPct:null;}),borderColor:'#F0601A',backgroundColor:'rgba(240,96,26,.08)',tension:.4,fill:true,pointRadius:5,pointHoverRadius:7,pointBackgroundColor:pSess.map(function(s){var pc=s.scores&&s.scores.globalPct!=null?s.scores.globalPct:null;return pc!=null?colPct(pc):'#6b7a8a';}),pointBorderColor:'#fff',pointBorderWidth:2}]},options:chartOpts});
+
+  var allTagMap={};var currentTagLabels=(p?p.tags:[]).map(tagLabel);
+  pSess.forEach(function(s){var snap=s.tagSnapshot||[];if(!snap.length){s.log.forEach(function(l){if(!allTagMap[l.action])allTagMap[l.action]={label:l.action,active:false};});}snap.forEach(function(t){var lbl=tagLabel(t);if(!allTagMap[lbl])allTagMap[lbl]={label:lbl,active:false};});});
+  currentTagLabels.forEach(function(lbl){if(allTagMap[lbl])allTagMap[lbl].active=true;else allTagMap[lbl]={label:lbl,active:true};});
+  var allTagLabels=Object.keys(allTagMap);
+  var chartDataByLabel={};
+  allTagLabels.forEach(function(lbl){var data=pSess.map(function(s){var d=s.scores&&s.scores.byTag?s.scores.byTag[lbl]:null;if(!d)return null;var tot=d.yes+d.no;return tot>0?Math.round(d.yes/tot*100):null;});if(data.every(function(d){return d===null;}))return;chartDataByLabel[lbl]={info:allTagMap[lbl],data:data};});
+
+  var sw=document.getElementById('actionSelectorWrap');sw.innerHTML='';document.getElementById('actionChartsWrap').innerHTML='';
+  Object.keys(chartDataByLabel).forEach(function(lbl){
+    var entry=chartDataByLabel[lbl];var btn=document.createElement('button');btn.className='btn btn-ghost btn-sm';btn.style.cssText='border-radius:20px;font-size:12px;';
+    var dot=entry.info.active?'<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#007818;margin-right:5px;vertical-align:middle"></span>':'<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#9ca3af;margin-right:5px;vertical-align:middle"></span>';
+    btn.innerHTML=dot+lbl;btn.dataset.label=lbl;
+    btn.addEventListener('click',function(){sw.querySelectorAll('button').forEach(function(b){b.style.background='';b.style.color='';b.style.borderColor='';});btn.style.background='rgba(240,96,26,.1)';btn.style.color='var(--orange)';btn.style.borderColor='var(--orange)';showActionChart(lbl,entry,labels,chartOpts);});
+    sw.appendChild(btn);
+  });
+  var fl=Object.keys(chartDataByLabel)[0];
+  if(fl){showActionChart(fl,chartDataByLabel[fl],labels,chartOpts);var fb=sw.querySelector('[data-label="'+fl+'"]');if(fb){fb.style.background='rgba(240,96,26,.1)';fb.style.color='var(--orange)';fb.style.borderColor='var(--orange)';}}
+  else{document.getElementById('actionChartsWrap').innerHTML='<div class="empty">Sin datos de acciones aún</div>';}
+
+  var allLogs=pSess.reduce(function(a,s){return a.concat(s.log);},[]);
+  var scAll=computeScores(allLogs,allTagLabels);
+  var evalHtml='';
+  if(pcts.length>=2){
+    evalHtml+='<p>🎯 <strong>Acierto promedio:</strong> '+avgAc+'%</p>';
+    var ts=allTagLabels.map(function(t){var d=scAll.byTag[t]||{yes:0,no:0};var tot=d.yes+d.no;return{t:t,pct:tot>0?Math.round(d.yes/tot*100):null};}).filter(function(x){return x.pct!==null;}).sort(function(a,b){return a.pct-b.pct;});
+    if(ts.length){evalHtml+='<p>🔴 <strong>A trabajar:</strong> '+ts[0].t+' ('+ts[0].pct+'%)</p><p>✅ <strong>Punto fuerte:</strong> '+ts[ts.length-1].t+' ('+ts[ts.length-1].pct+'%)</p>';}
+    if(cScore!==null){evalHtml+='<div style="margin-top:10px;padding:12px;border-radius:8px;background:'+(cScore>=4?'rgba(0,120,24,.07)':cScore>=3?'rgba(245,166,35,.08)':'rgba(232,64,64,.07)')+';border:1px solid '+CAND_COLORS[cScore]+'"><strong style="color:'+CAND_COLORS[cScore]+'">Nivel '+cScore+'/5 — '+CAND_NAMES[cScore]+'</strong><br><span style="font-size:13px">'+CAND_DESC[cScore]+'</span></div>';}
+  }else{evalHtml='<p style="color:var(--muted)">Se necesitan al menos 2 sesiones.</p>';}
+  document.getElementById('progressEval').innerHTML=evalHtml;
+}
+
+/* PDF EXPORT */
+function exportPDF(type){
+  var pid=document.getElementById('dashPlayer').value;if(!pid){toast('Selecciona un jugador','#e84040');return;}
+  var p=players.find(function(x){return x.id===pid;});
+  var allSess=sessions.filter(function(s){return s.playerId===pid;}).slice().sort(function(a,b){return new Date(a.date)-new Date(b.date);});
+  var targetSess=allSess;
+  if(type==='partido'){var sid=document.getElementById('exportSessionSel').value;if(!sid){toast('Selecciona un partido','#e84040');return;}targetSess=allSess.filter(function(s){return s.id===sid;});}
+  else if(type==='mes'){var mes=document.getElementById('exportMonthSel').value;if(!mes){toast('Selecciona un mes','#e84040');return;}targetSess=allSess.filter(function(s){return new Date(s.date).toLocaleDateString('es-CO',{year:'numeric',month:'long'})===mes;});}
+  if(!targetSess.length){toast('Sin sesiones para este período','#e84040');return;}
+  buildAndPrintPDF(p,targetSess,type);
+}
+
+function buildAndPrintPDF(p,targetSess,type){
+  var colF=function(pct){return pct>=90?'#007818':pct>=70?'#9a6500':'#c02020';};
+  var allLogs=targetSess.reduce(function(a,s){return a.concat(s.log);},[]);
+  var allTagLabels=[],seen={};
+  targetSess.forEach(function(s){(s.tagSnapshot||[]).forEach(function(t){var l=tagLabel(t);if(!seen[l]){seen[l]=true;allTagLabels.push(l);}});s.log.forEach(function(l){if(!seen[l.action]){seen[l.action]=true;allTagLabels.push(l.action);}});});
+  var scAll=computeScores(allLogs,allTagLabels);
+  var pcts=targetSess.map(function(s){return s.scores&&s.scores.globalPct!=null?s.scores.globalPct:null;}).filter(function(x){return x!=null;});
+  var avgAc=pcts.length?Math.round(pcts.reduce(function(a,b){return a+b;},0)/pcts.length):null;
+  var cScore=candidacyScore(avgAc);
+  var typeLabel=type==='partido'?'Informe por Partido':type==='mes'?'Informe Mensual':'Informe Completo';
+  var dateRange=targetSess.length===1?fmtDate(targetSess[0].date):fmtDate(targetSess[0].date)+' — '+fmtDate(targetSess[targetSess.length-1].date);
+  var candColor=cScore?CAND_COLORS[cScore]:'#6b7a8a';
+  var scaleSegs=['#e84040','#f5a623','#c8c840','#90c840','#007818'].map(function(c,i){return '<div style="flex:1;height:14px;border-radius:3px;background:'+c+';opacity:'+(cScore&&i<cScore?1:.2)+'"></div>';}).join('');
+
+  var accionesHTML=allTagLabels.map(function(t){var d=scAll.byTag[t]||{yes:0,no:0};var tot=d.yes+d.no;var pct=tot>0?Math.round(d.yes/tot*100):null;var c=pct!==null?colF(pct):'#6b7a8a';var bar=pct!==null?('<div style="height:8px;background:#eee;border-radius:4px;margin-top:4px"><div style="height:100%;width:'+pct+'%;background:'+c+';border-radius:4px"></div></div>'):'';return '<div style="margin-bottom:10px;padding:8px 10px;background:#f9fafb;border-radius:6px;border-left:3px solid '+c+'"><div style="display:flex;justify-content:space-between;font-size:12px;font-weight:600"><span>'+t+'</span><span style="color:'+c+'">'+(pct!==null?pct+'%':'—')+' <span style="font-weight:400;color:#6b7a8a">('+d.yes+'✅ '+d.no+'❌ / '+tot+')</span></span></div>'+bar+'</div>';}).join('');
+
+  var sesTableRows=targetSess.map(function(s){var pct=s.scores&&s.scores.globalPct!=null?s.scores.globalPct:null;var c=pct!==null?colF(pct):'#6b7a8a';return '<tr><td style="padding:6px 8px;border-bottom:1px solid #eee">'+fmtDate(s.date)+'</td><td style="padding:6px 8px;border-bottom:1px solid #eee">'+s.rival+'</td><td style="padding:6px 8px;border-bottom:1px solid #eee;text-align:center">'+s.minutes+"'</td><td style=\"padding:6px 8px;border-bottom:1px solid #eee;text-align:center\">"+s.log.length+'</td><td style="padding:6px 8px;border-bottom:1px solid #eee;text-align:center;font-weight:700;color:'+c+'">'+(pct!==null?pct+'%':'—')+'</td><td style="padding:6px 8px;border-bottom:1px solid #eee;font-size:11px;color:#6b7a8a">'+(s.obs||'—')+'</td></tr>';}).join('');
+
+  function buildSVG(label,logs){
+    var W=580,H=130,PL=55,PR=20,PT=15,PB=35,cw=W-PL-PR,ch=H-PT-PB;
+    if(!logs.length)return '<p style="color:#aaa;font-size:12px">Sin registros</p>';
+    var maxSecs=Math.max.apply(null,logs.map(function(l){return l.secs;}))+30;
+    function xp(s){return PL+Math.round((s/maxSecs)*cw);}
+    function yp(r){return PT+(r==='yes'?Math.round(ch*0.15):Math.round(ch*0.82));}
+    var svg='<svg width="'+W+'" height="'+H+'" xmlns="http://www.w3.org/2000/svg" style="display:block">';
+    svg+='<rect x="'+PL+'" y="'+PT+'" width="'+cw+'" height="'+ch+'" fill="#f9fafb" rx="4"/>';
+    svg+='<text x="'+(PL-6)+'" y="'+(PT+Math.round(ch*0.15)+4)+'" font-size="9" fill="#007818" text-anchor="end" font-weight="600">Ejecutó</text>';
+    svg+='<text x="'+(PL-6)+'" y="'+(PT+Math.round(ch*0.82)+4)+'" font-size="9" fill="#e84040" text-anchor="end" font-weight="600">No ejecutó</text>';
+    svg+='<line x1="'+PL+'" y1="'+(PT+Math.round(ch*0.15))+'" x2="'+(PL+cw)+'" y2="'+(PT+Math.round(ch*0.15))+'" stroke="#007818" stroke-width="1" stroke-dasharray="4,4" opacity=".25"/>';
+    svg+='<line x1="'+PL+'" y1="'+(PT+Math.round(ch*0.82))+'" x2="'+(PL+cw)+'" y2="'+(PT+Math.round(ch*0.82))+'" stroke="#e84040" stroke-width="1" stroke-dasharray="4,4" opacity=".25"/>';
+    svg+='<line x1="'+PL+'" y1="'+(PT+ch)+'" x2="'+(PL+cw)+'" y2="'+(PT+ch)+'" stroke="#ddd" stroke-width="1"/>';
+    for(var t2=0;t2<=maxSecs;t2+=15*60){var xv=xp(t2);svg+='<text x="'+xv+'" y="'+(PT+ch+11)+'" font-size="8" fill="#9ca3af" text-anchor="middle">'+fmt(t2)+'</text><line x1="'+xv+'" y1="'+PT+'" x2="'+xv+'" y2="'+(PT+ch)+'" stroke="#eee" stroke-width="1"/>';}
+    if(logs.length>1){svg+='<polyline points="'+logs.map(function(l){return xp(l.secs)+','+yp(l.result);}).join(' ')+'" fill="none" stroke="#1a1f26" stroke-width="1.5" stroke-linejoin="round"/>';}
+    logs.forEach(function(l){var x=xp(l.secs),y=yp(l.result);svg+='<circle cx="'+x+'" cy="'+y+'" r="5" fill="'+(l.result==='yes'?'#007818':'#e84040')+'" stroke="#fff" stroke-width="1.5"/><text x="'+x+'" y="'+(PT+ch+22)+'" font-size="7" fill="#9ca3af" text-anchor="middle">'+l.ts+'</text>';});
+    return svg+'</svg>';
+  }
+
+  var partidoChartsHTML='';
+  var partidoEvalHTML='';
+  if(type==='partido'&&targetSess.length===1){
+    var se=targetSess[0];
+    allTagLabels.forEach(function(label){
+      var logsA=se.log.filter(function(l){return l.action===label;}).slice().sort(function(a,b){return a.secs-b.secs;});if(!logsA.length)return;
+      var d=scAll.byTag[label]||{yes:0,no:0};var tot=d.yes+d.no;var pct=tot>0?Math.round(d.yes/tot*100):null;var c=pct!==null?colF(pct):'#6b7a8a';
+      partidoChartsHTML+='<div style="margin-bottom:18px;padding:12px;background:#fff;border:1px solid #eee;border-radius:8px;border-left:3px solid '+c+'"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><span style="font-size:13px;font-weight:700">⚡ '+label+'</span><span style="font-size:13px;font-weight:800;color:'+c+'">'+(pct!==null?pct+'%':'—')+' <span style="font-size:11px;font-weight:400;color:#6b7a8a">('+d.yes+'✅ '+d.no+'❌)</span></span></div>'+buildSVG(label,logsA)+'</div>';
+    });
+    var pctE=se.scores&&se.scores.globalPct!=null?se.scores.globalPct:null;
+    var cE=pctE!==null?colF(pctE):'#6b7a8a';
+    var actScores=allTagLabels.map(function(t){var d=scAll.byTag[t]||{yes:0,no:0};var tot=d.yes+d.no;return{t:t,pct:tot>0?Math.round(d.yes/tot*100):null,tot:tot};}).filter(function(x){return x.pct!==null;}).sort(function(a,b){return a.pct-b.pct;});
+    partidoEvalHTML+='<div style="display:flex;gap:12px;margin-bottom:14px"><div style="flex:1;background:#f9fafb;border-radius:8px;padding:12px;border-bottom:2px solid '+cE+'"><div style="font-size:10px;color:#6b7a8a;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Acierto global</div><div style="font-size:28px;font-weight:800;color:'+cE+'">'+(pctE!==null?pctE+'%':'—')+'</div></div><div style="flex:1;background:#f9fafb;border-radius:8px;padding:12px;border-bottom:2px solid #F0601A"><div style="font-size:10px;color:#6b7a8a;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Acciones registradas</div><div style="font-size:28px;font-weight:800;color:#F0601A">'+se.log.length+'</div></div></div>';
+    if(actScores.length){var best=actScores[actScores.length-1],worst=actScores[0];partidoEvalHTML+='<div style="display:flex;gap:12px;margin-bottom:14px"><div style="flex:1;background:rgba(0,120,24,.06);border:1px solid #007818;border-radius:8px;padding:12px"><div style="font-size:10px;font-weight:700;color:#007818;margin-bottom:4px">✅ MEJOR ACCIÓN</div><div style="font-size:13px;font-weight:700">'+best.t+'</div><div style="font-size:20px;font-weight:800;color:#007818;margin-top:4px">'+best.pct+'% <span style="font-size:11px;font-weight:400;color:#6b7a8a">('+best.tot+' veces)</span></div></div><div style="flex:1;background:rgba(232,64,64,.06);border:1px solid #e84040;border-radius:8px;padding:12px"><div style="font-size:10px;font-weight:700;color:#e84040;margin-bottom:4px">🔴 A MEJORAR</div><div style="font-size:13px;font-weight:700">'+worst.t+'</div><div style="font-size:20px;font-weight:800;color:#e84040;margin-top:4px">'+worst.pct+'% <span style="font-size:11px;font-weight:400;color:#6b7a8a">('+worst.tot+' veces)</span></div></div></div>';}
+    var p1=se.log.filter(function(l){return l.period===1;}),p2=se.log.filter(function(l){return l.period===2;});
+    if(p1.length&&p2.length){var sc1=computeScores(p1,allTagLabels),sc2=computeScores(p2,allTagLabels);var c1=sc1.globalPct!==null?colF(sc1.globalPct):'#6b7a8a',c2=sc2.globalPct!==null?colF(sc2.globalPct):'#6b7a8a';partidoEvalHTML+='<div style="background:#f9fafb;border-radius:8px;padding:12px;margin-bottom:14px"><div style="font-size:10px;font-weight:700;color:#6b7a8a;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Acierto por Tiempo</div><div style="display:flex;gap:12px"><div style="flex:1;text-align:center"><div style="font-size:11px;color:#6b7a8a;margin-bottom:4px">1er Tiempo</div><div style="font-size:24px;font-weight:800;color:'+c1+'">'+(sc1.globalPct!==null?sc1.globalPct+'%':'—')+'</div><div style="font-size:11px;color:#6b7a8a">'+p1.length+' acciones</div></div><div style="flex:1;text-align:center"><div style="font-size:11px;color:#6b7a8a;margin-bottom:4px">2do Tiempo</div><div style="font-size:24px;font-weight:800;color:'+c2+'">'+(sc2.globalPct!==null?sc2.globalPct+'%':'—')+'</div><div style="font-size:11px;color:#6b7a8a">'+p2.length+' acciones</div></div></div></div>';}
+    if(se.obs){partidoEvalHTML+='<div style="background:#f9fafb;border:1px solid #eee;border-radius:8px;padding:12px"><div style="font-size:10px;font-weight:700;color:#6b7a8a;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Observaciones del Analista</div><div style="font-size:13px;line-height:1.6">'+se.obs+'</div></div>';}
+  }
+
+  var bodyContent='';
+  if(type==='partido'){
+    bodyContent='<h2 style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#6b7a8a;margin:18px 0 10px">Acciones en el Partido</h2>'+partidoChartsHTML+'<h2 style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#6b7a8a;margin:18px 0 10px">Evaluación del Partido</h2>'+partidoEvalHTML;
+  } else {
+    bodyContent='<h2 style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#6b7a8a;margin:18px 0 10px">Acierto por Acción</h2>'+accionesHTML+'<h2 style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#6b7a8a;margin:18px 0 10px">Sesiones</h2><table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr><th style="text-align:left;padding:6px 8px;background:#f5f6f8;font-size:10px;text-transform:uppercase;color:#6b7a8a;font-weight:600">Fecha</th><th style="text-align:left;padding:6px 8px;background:#f5f6f8;font-size:10px;text-transform:uppercase;color:#6b7a8a;font-weight:600">Rival</th><th style="text-align:left;padding:6px 8px;background:#f5f6f8;font-size:10px;text-transform:uppercase;color:#6b7a8a;font-weight:600">Min</th><th style="text-align:left;padding:6px 8px;background:#f5f6f8;font-size:10px;text-transform:uppercase;color:#6b7a8a;font-weight:600">Tags</th><th style="text-align:left;padding:6px 8px;background:#f5f6f8;font-size:10px;text-transform:uppercase;color:#6b7a8a;font-weight:600">Acierto</th><th style="text-align:left;padding:6px 8px;background:#f5f6f8;font-size:10px;text-transform:uppercase;color:#6b7a8a;font-weight:600">Observaciones</th></tr></thead><tbody>'+sesTableRows+'</tbody></table>';
+  }
+
+  var candBg=cScore&&cScore>=4?'rgba(0,120,24,.06)':cScore&&cScore>=3?'rgba(245,166,35,.06)':'rgba(232,64,64,.06)';
+  var candBlock=type!=='partido'?('<div style="border-radius:8px;padding:12px 16px;border:1px solid '+candColor+';background:'+candBg+';margin-bottom:20px"><strong style="color:'+candColor+'">Nivel '+(cScore||'—')+'/5 — '+(cScore?CAND_NAMES[cScore]:'Sin datos')+'</strong><p style="font-size:12px;margin-top:4px">'+(cScore?CAND_DESC[cScore]:'')+'</p><div style="display:flex;gap:4px;margin:8px 0 4px">'+scaleSegs+'</div><div style="display:flex;justify-content:space-between;font-size:9px;color:#6b7a8a"><span>1 Iniciando</span><span>2 En proceso</span><span>3 Desarrollando</span><span>4 Consolidando</span><span>5 Candidato</span></div></div>'):'';
+
+  var html='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>'+typeLabel+' '+p.name+'</title><style>body{font-family:Arial,sans-serif;color:#1a1f26;margin:0;padding:0;font-size:13px;}.page{padding:32px 36px;max-width:800px;margin:0 auto;}.stats-row{display:flex;gap:12px;margin-bottom:20px;}.stat{flex:1;background:#f9fafb;border-radius:8px;padding:12px;text-align:center;border-bottom:2px solid #F0601A;}.stat .val{font-size:26px;font-weight:800;}.stat .lbl{font-size:10px;color:#6b7a8a;text-transform:uppercase;letter-spacing:.5px;margin-top:2px;}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}</style></head><body><div class="page">';
+  html+='<div style="display:flex;justify-content:space-between;align-items:start;border-bottom:3px solid #F0601A;padding-bottom:14px;margin-bottom:20px">';
+  html+='<div><div style="font-size:11px;color:#F0601A;font-weight:700;text-transform:uppercase;letter-spacing:1px">EFC · Cantera de Héroes</div><div style="font-size:22px;font-weight:800;margin-top:4px">'+p.name+'</div><div style="font-size:13px;color:#6b7a8a;margin-top:2px">'+(p.position||'—')+(p.number?' · #'+p.number:'')+'</div></div>';
+  html+='<div style="text-align:right"><div style="font-size:11px;color:#6b7a8a">'+typeLabel+'</div><div style="font-size:13px;font-weight:600;margin-top:2px">'+dateRange+'</div>'+(type==='partido'?'<div style="font-size:12px;color:#6b7a8a;margin-top:2px">vs '+targetSess[0].rival+'</div>':'')+'<div style="font-size:11px;color:#6b7a8a;margin-top:2px">'+targetSess.length+' sesión'+(targetSess.length!==1?'es':'')+' · '+allLogs.length+' acciones</div></div></div>';
+  html+='<div class="stats-row"><div class="stat"><div class="val">'+targetSess.length+'</div><div class="lbl">Sesiones</div></div><div class="stat"><div class="val" style="color:'+(avgAc!==null?colF(avgAc):'#6b7a8a')+'">'+(avgAc!==null?avgAc+'%':'—')+'</div><div class="lbl">Acierto global</div></div>'+(type!=='partido'?'<div class="stat"><div class="val" style="color:'+candColor+'">'+(cScore||'—')+'/5</div><div class="lbl">Candidatura</div></div>':'')+'<div class="stat"><div class="val">'+allLogs.length+'</div><div class="lbl">Tags totales</div></div></div>';
+  html+=candBlock+bodyContent;
+  html+='<div style="margin-top:32px;padding-top:12px;border-top:1px solid #eee;font-size:10px;color:#9ca3af;display:flex;justify-content:space-between"><span>EFC Player Eval · Cantera de Héroes</span><span>Generado: '+new Date().toLocaleString('es-CO')+'</span></div>';
+  html+='</div></body></html>';
+
+  var win=window.open('','_blank');
+  if(!win){toast('Permite ventanas emergentes para generar el PDF','#e84040');return;}
+  win.document.write(html);
+  win.document.close();
+  win.onload=function(){win.print();};
+}
+
+/* EXPORT / IMPORT */
+function exportData(){
+  var data={players:players,sessions:sessions,exportedAt:new Date().toISOString()};
+  var blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+  var url=URL.createObjectURL(blob);
+  var a=document.createElement('a');
+  a.href=url;
+  a.download='EFC_PlayerEval_backup_'+new Date().toISOString().slice(0,10)+'.json';
+  a.click();
+  setTimeout(function(){URL.revokeObjectURL(url);},2000);
+  toast('✅ Backup descargado','#007818');
+}
+function importData(input){
+  var file=input.files[0];if(!file)return;
+  var reader=new FileReader();
+  reader.onload=function(e){
+    try{
+      var data=JSON.parse(e.target.result);
+      if(!data.players||!data.sessions){toast('Archivo inválido','#e84040');return;}
+      showConfirm('Importar datos','Se reemplazarán todos los jugadores y sesiones actuales con los del backup. Esta acción no se puede deshacer.',function(){
+        players=data.players;
+        sessions=data.sessions;
+        save();
+        closeModal('modalData');
+        renderPlayers();
+        toast('✅ Datos importados correctamente','#007818');
+      });
+    }catch(err){toast('Error al leer el archivo','#e84040');}
+  };
+  reader.readAsText(file);
+  input.value='';
+}
+
+/* EXPORT / IMPORT */
+function openModal(id){document.getElementById(id).classList.add('open');}
+function closeModal(id){document.getElementById(id).classList.remove('open');}
+document.querySelectorAll('.modal-bg').forEach(function(m){m.addEventListener('click',function(e){if(e.target===m)m.classList.remove('open');});});
+
+/* MIGRATION + INIT */
+function migrateOldSessions(){
+  var changed=false;
+  sessions.forEach(function(s){if(!s.tagSnapshot){var p=players.find(function(x){return x.id===s.playerId;});if(p){s.tagSnapshot=p.tags.map(function(t){return typeof t==='string'?{label:t,descYes:'',descNo:''}:{label:t.label,descYes:t.descYes||'',descNo:t.descNo||''};});}else{var seen={};s.log.forEach(function(l){seen[l.action]=true;});s.tagSnapshot=Object.keys(seen).map(function(lbl){return{label:lbl,descYes:'',descNo:''};});}changed=true;}});
+  if(changed)save();
+}
+function init(){
+  if(!players.length){players.push({id:'demo1',name:'Carlos Ríos',position:'Mediocampista',number:'8',tags:[{label:'Escanear antes de recibir',descYes:'Mira el entorno al menos 2 veces antes del balón',descNo:'Recibe sin mirar, de espaldas al juego'},{label:'Manejar perfil correcto',descYes:'Se orienta para ver el campo antes de controlar',descNo:'Controla sin perfil, pierde opciones de pase'},{label:'Presión alta sin balón',descYes:'Presiona al portador con intensidad y dirección',descNo:'Camina o no presiona al rival'},{label:'Conducción entre líneas',descYes:'Conduce hacia espacios entre defensas y medios',descNo:'Conduce hacia atrás o hacia zona sin peligro'},{label:'Apoyo al portador',descYes:'Se ofrece en ángulo y distancia correcta',descNo:'No se mueve o se queda estático sin ofrecer opción'}]});save();}
+  migrateOldSessions();renderPlayers();
+}
+init();
+</script>
+</body>
+</html>
