@@ -1,0 +1,1097 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EFC · Player Eval</title>
+<style>
+:root{--bg:#f5f6f8;--surface:#fff;--card:#fff;--border:#e2e6ea;--orange:#F0601A;--orange2:#c44e14;--green:#007818;--green2:#005c12;--text:#1a1f26;--muted:#6b7a8a;--danger:#e84040;--warn:#f5a623;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:'Segoe UI',sans-serif;min-height:100vh;}
+nav{background:#fff;border-bottom:3px solid var(--orange);display:flex;align-items:stretch;height:54px;box-shadow:0 1px 4px rgba(0,0,0,.06);}
+.nav-brand{display:flex;align-items:center;padding:0 20px;border-right:1px solid var(--border);}
+.nav-title{font-weight:800;font-size:14px;line-height:1.1;}
+.nav-title span{display:block;font-size:10px;color:var(--orange);font-weight:600;letter-spacing:1px;text-transform:uppercase;}
+.nav-links{display:flex;}
+nav button{background:none;border:none;color:var(--muted);font-size:13px;padding:0 16px;cursor:pointer;transition:all .2s;border-bottom:3px solid transparent;margin-bottom:-3px;font-weight:500;}
+nav button.active,nav button:hover{color:var(--text);border-bottom-color:var(--orange);}
+.page{display:none;padding:20px;max-width:1200px;margin:0 auto;}
+.page.active{display:block;}
+.card{background:#fff;border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,.04);}
+.card-ol{border-left:3px solid var(--orange);}
+h2{font-size:15px;font-weight:700;margin-bottom:12px;}
+h3{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px;}
+.btn{display:inline-flex;align-items:center;gap:5px;padding:7px 14px;border-radius:7px;border:none;font-size:13px;font-weight:600;cursor:pointer;transition:all .15s;}
+.btn-orange{background:var(--orange);color:#fff;}.btn-orange:hover{background:var(--orange2);}
+.btn-green{background:var(--green);color:#fff;}.btn-green:hover{background:var(--green2);}
+.btn-warn{background:var(--warn);color:#000;}
+.btn-ghost{background:transparent;border:1px solid var(--border);color:var(--text);}.btn-ghost:hover{background:var(--bg);}
+.btn-sm{padding:5px 11px;font-size:12px;}
+.btn-period{flex:1;padding:10px;border-radius:8px;border:2px solid var(--border);background:var(--bg);color:var(--muted);cursor:pointer;font-size:13px;font-weight:700;transition:all .2s;text-align:center;}
+.btn-period.running{border-color:var(--green);color:var(--green);background:rgba(0,120,24,.06);animation:pulse 2s infinite;}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(0,120,24,.2)}50%{box-shadow:0 0 0 6px rgba(0,120,24,0)}}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
+input,select,textarea{background:#f5f6f8;border:1px solid var(--border);color:var(--text);border-radius:7px;padding:7px 11px;font-size:13px;width:100%;outline:none;transition:border .2s;}
+input:focus,select:focus,textarea:focus{border-color:var(--orange);}
+label{font-size:12px;color:var(--muted);display:block;margin-bottom:3px;}
+.form-group{margin-bottom:10px;}
+.player-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px;}
+.player-card{background:#fff;border:1px solid var(--border);border-radius:10px;padding:14px;cursor:pointer;transition:all .15s;position:relative;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.04);}
+.player-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--orange),var(--green));}
+.player-card:hover{border-color:var(--orange);transform:translateY(-2px);box-shadow:0 4px 12px rgba(240,96,26,.12);}
+.avatar{width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:15px;margin-bottom:8px;color:#fff;}
+.tag-pair{background:#f9fafb;border:1px solid var(--border);border-radius:9px;padding:11px 13px;margin-bottom:8px;}
+.tag-pair-label{font-size:13px;font-weight:600;margin-bottom:7px;}
+.tag-btns{display:flex;gap:7px;}
+.tb-y{flex:1;background:rgba(0,120,24,.08);border:1.5px solid var(--green);color:var(--green);border-radius:7px;padding:9px;font-size:13px;font-weight:600;cursor:pointer;transition:all .15s;text-align:center;}
+.tb-y:active{background:var(--green);color:#fff;}
+.tb-n{flex:1;background:rgba(232,64,64,.07);border:1.5px solid var(--danger);color:var(--danger);border-radius:7px;padding:9px;font-size:13px;font-weight:600;cursor:pointer;transition:all .15s;text-align:center;}
+.tb-n:active{background:var(--danger);color:#fff;}
+.tag-desc-row{display:flex;gap:8px;margin-top:6px;}
+.tag-desc-yes{flex:1;font-size:11px;color:var(--green);background:rgba(0,120,24,.06);border-radius:5px;padding:4px 7px;line-height:1.4;}
+.tag-desc-no{flex:1;font-size:11px;color:#c02020;background:rgba(232,64,64,.06);border-radius:5px;padding:4px 7px;line-height:1.4;}
+.pc{font-size:11px;color:var(--muted);text-align:right;margin-top:4px;}
+.log-list{max-height:320px;overflow-y:auto;display:flex;flex-direction:column;gap:4px;}
+.log-item{background:#f9fafb;border:1px solid var(--border);border-radius:7px;padding:6px 11px;display:flex;align-items:center;gap:7px;font-size:13px;}
+.log-ts{color:var(--orange);font-size:11px;font-weight:700;min-width:68px;}
+.log-ts.click{cursor:pointer;text-decoration:underline dotted;}.log-ts.click:hover{color:var(--orange2);}
+.log-period{font-size:10px;background:rgba(240,96,26,.1);color:var(--orange);border-radius:4px;padding:1px 5px;font-weight:700;}
+.log-icon{font-size:13px;min-width:16px;}
+.log-act{flex:1;}
+.log-del{color:var(--muted);cursor:pointer;font-size:15px;line-height:1;}.log-del:hover{color:var(--danger);}
+.tl-wrap{position:relative;height:28px;background:#f5f6f8;border-radius:6px;overflow:hidden;margin-top:8px;cursor:pointer;border:1px solid var(--border);}
+.tl-prog{position:absolute;left:0;top:0;bottom:0;background:rgba(240,96,26,.15);pointer-events:none;}
+.tl-marks{position:absolute;inset:0;}
+.clip-box{background:#000;border-radius:8px;overflow:hidden;}
+.clip-box video{width:100%;display:block;max-height:200px;object-fit:contain;}
+.clip-controls{padding:10px;background:#111;display:flex;flex-direction:column;gap:8px;}
+.clip-range-row{display:flex;align-items:center;gap:6px;font-size:12px;color:#aaa;}
+.clip-range-row input[type=range]{flex:1;accent-color:var(--orange);}
+.pbar{height:6px;border-radius:3px;background:var(--border);overflow:hidden;margin-top:3px;}
+.pbar-fill{height:100%;border-radius:3px;}
+.stat-box{background:#f9fafb;border:1px solid var(--border);border-radius:8px;padding:12px;text-align:center;position:relative;overflow:hidden;}
+.stat-box::after{content:'';position:absolute;bottom:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--orange),var(--green));}
+.stat-box .val{font-size:24px;font-weight:800;}
+.stat-box .lbl{font-size:11px;color:var(--muted);margin-top:2px;}
+table{width:100%;border-collapse:collapse;font-size:13px;}
+th{text-align:left;padding:7px 9px;color:var(--muted);font-weight:500;border-bottom:1px solid var(--border);font-size:11px;text-transform:uppercase;}
+td{padding:8px 9px;border-bottom:1px solid var(--border);}
+tr:last-child td{border-bottom:none;}
+tr:hover td{background:#fafafa;}
+.badge{display:inline-block;padding:2px 7px;border-radius:12px;font-size:11px;font-weight:700;}
+.bg{background:rgba(0,120,24,.12);color:#007818;}.by{background:rgba(245,166,35,.15);color:#9a6500;}.br{background:rgba(232,64,64,.12);color:#c02020;}
+.scale-bar{display:flex;gap:4px;margin:10px 0 4px;}
+.scale-seg{flex:1;height:14px;border-radius:3px;transition:all .3s;}
+.scale-labels{display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-bottom:4px;}
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:100;align-items:center;justify-content:center;}
+.modal-bg.open{display:flex;}
+.modal{background:#fff;border:1px solid var(--border);border-top:3px solid var(--orange);border-radius:12px;padding:22px;width:520px;max-width:96vw;max-height:92vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.12);}
+.modal h2{margin-bottom:14px;}
+.modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:14px;}
+.vid-placeholder{height:130px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;color:var(--muted);font-size:13px;cursor:pointer;border:2px dashed var(--border);border-radius:9px;background:#f9fafb;transition:all .2s;}
+.vid-placeholder:hover{border-color:var(--orange);color:var(--orange);}
+.sh{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
+.chip{display:inline-block;background:rgba(240,96,26,.08);color:var(--orange);border:1px solid rgba(240,96,26,.2);border-radius:20px;padding:2px 9px;font-size:11px;margin:2px;}
+.empty{color:var(--muted);font-size:13px;text-align:center;padding:20px;}
+.divider{border:none;border-top:1px solid var(--border);margin:12px 0;}
+.timer-big{font-size:22px;font-weight:800;color:var(--orange);font-variant-numeric:tabular-nums;letter-spacing:1px;}
+.live-dot{background:var(--danger);color:#fff;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700;animation:blink 1.2s infinite;}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+.flex{display:flex;align-items:center;gap:8px;}
+.mt{margin-top:10px;}
+.live-layout{display:grid;grid-template-columns:1fr 350px;gap:12px;align-items:start;}
+@media(max-width:820px){.live-layout{grid-template-columns:1fr;}}
+.toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);padding:9px 22px;border-radius:8px;font-weight:700;font-size:13px;z-index:999;animation:fadeup .3s ease;white-space:nowrap;color:#fff;}
+@keyframes fadeup{from{opacity:0;transform:translateX(-50%) translateY(8px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+</style>
+</head>
+<body>
+<nav>
+  <div class="nav-brand">
+    <div class="nav-title">EFC Player Eval<span>Cantera de Héroes</span></div>
+  </div>
+  <div class="nav-links">
+    <button class="active" data-page="jugadores">Jugadores</button>
+    <button data-page="live">Sesión en Vivo</button>
+    <button data-page="historial">Historial</button>
+    <button data-page="dashboard">Dashboard</button>
+  </div>
+</nav>
+
+<!-- JUGADORES -->
+<div class="page active" id="pg-jugadores">
+  <div class="sh"><h2 style="margin:0">Plantilla EFC</h2><button class="btn btn-orange" onclick="openNewPlayer()">+ Nuevo Jugador</button></div>
+  <div class="player-list" id="playerList"></div>
+</div>
+
+<!-- LIVE -->
+<div class="page" id="pg-live">
+  <div class="card card-ol">
+    <div class="grid2" style="align-items:start;gap:16px">
+      <div>
+        <h3>Jugador</h3>
+        <select id="livePlayer" onchange="loadLivePlayer()"><option value="">— Seleccionar —</option></select>
+      </div>
+      <div>
+        <h3>Tiempos del Partido</h3>
+        <div style="display:flex;gap:8px;margin-bottom:10px">
+          <button class="btn-period" id="btn1T" onclick="startPeriod(1)">▶ 1er Tiempo</button>
+          <button class="btn-period" id="btn2T" onclick="startPeriod(2)">▶ 2do Tiempo</button>
+        </div>
+        <div style="display:flex;gap:20px;align-items:center">
+          <div><div style="font-size:10px;color:var(--muted);margin-bottom:2px">1ER TIEMPO</div><div class="timer-big" id="timer1">00:00</div></div>
+          <div style="color:var(--border);font-size:20px">|</div>
+          <div><div style="font-size:10px;color:var(--muted);margin-bottom:2px">2DO TIEMPO</div><div class="timer-big" id="timer2" style="color:var(--muted)">00:00</div></div>
+          <span id="liveDot" style="display:none" class="live-dot">● LIVE</span>
+        </div>
+        <div class="flex mt">
+          <button class="btn btn-ghost btn-sm" onclick="pausePeriod()">⏸ Pausar</button>
+          <button class="btn btn-ghost btn-sm" onclick="resetAll()">↺ Reset</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div id="liveMain" style="display:none">
+    <div class="live-layout">
+      <div>
+        <div class="card card-ol">
+          <div class="sh"><h2 style="margin:0">Acciones del Jugador</h2><span style="font-size:11px;color:var(--muted)">✅ Ejecutó &nbsp;|&nbsp; ❌ No ejecutó</span></div>
+          <div id="liveTagGrid"></div>
+        </div>
+      </div>
+      <div>
+        <div class="card">
+          <div class="sh">
+            <div><h2 style="margin:0">Registro</h2><span id="liveSummary" style="font-size:12px;color:var(--muted)"></span></div>
+            <button class="btn btn-warn btn-sm" onclick="openCloseSession()">Cerrar Sesión</button>
+          </div>
+          <div class="log-list" id="liveLog"></div>
+          <div class="empty" id="liveLogEmpty">Sin acciones aún</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- HISTORIAL -->
+<div class="page" id="pg-historial">
+  <div class="sh">
+    <h2 style="margin:0">Historial de Sesiones</h2>
+    <select id="histFilter" onchange="renderHistorial()" style="width:180px"><option value="">Todos los jugadores</option></select>
+  </div>
+  <div class="card">
+    <table>
+      <thead><tr><th>Jugador</th><th>Fecha</th><th>Rival</th><th>Min</th><th>Acciones</th><th>Acierto</th><th></th></tr></thead>
+      <tbody id="histTable"></tbody>
+    </table>
+    <div class="empty" id="histEmpty" style="display:none">Sin sesiones registradas</div>
+  </div>
+</div>
+
+<!-- DASHBOARD -->
+<div class="page" id="pg-dashboard">
+  <div class="sh">
+    <h2 style="margin:0">Dashboard de Evolución</h2>
+    <select id="dashPlayer" onchange="renderDashboard()" style="width:200px"><option value="">— Seleccionar jugador —</option></select>
+  </div>
+  <div id="dashContent" style="display:none">
+    <div class="grid3" style="margin-bottom:12px">
+      <div class="stat-box"><div class="val" id="dSess">0</div><div class="lbl">Sesiones</div></div>
+      <div class="stat-box"><div class="val" id="dAcierto">—</div><div class="lbl">% Acierto global</div></div>
+      <div class="stat-box"><div class="val" id="dCandidacy" style="color:var(--orange)">—/5</div><div class="lbl">Nivel de candidatura</div></div>
+    </div>
+    <div class="card card-ol">
+      <h3>Nivel de Candidatura al Profesional</h3>
+      <div class="scale-labels"><span>1 Iniciando</span><span>2 En proceso</span><span>3 Desarrollando</span><span>4 Consolidando</span><span>5 Candidato</span></div>
+      <div class="scale-bar" id="scaleBar">
+        <div class="scale-seg" style="background:#e84040"></div>
+        <div class="scale-seg" style="background:#f5a623"></div>
+        <div class="scale-seg" style="background:#c8c840"></div>
+        <div class="scale-seg" style="background:#90c840"></div>
+        <div class="scale-seg" style="background:#007818"></div>
+      </div>
+      <div id="candidacyLabel" style="font-size:13px;color:var(--muted);text-align:center;margin-top:4px">Sin datos suficientes</div>
+    </div>
+    <div class="card"><h2>% Acierto global por partido</h2><canvas id="aciertoChart" height="200"></canvas></div>
+    <div class="card">
+      <h2 style="margin-bottom:10px">Gráficas por Acción</h2>
+      <div id="actionSelectorWrap" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px"></div>
+      <div id="actionChartsWrap"></div>
+    </div>
+    <div class="card card-ol"><h3>Evaluación de Progreso</h3><div id="progressEval" style="font-size:14px;line-height:1.8"></div></div>
+  </div>
+  <div class="empty" id="dashEmpty">Selecciona un jugador</div>
+</div>
+
+<!-- MODAL: Jugador -->
+<div class="modal-bg" id="modalPlayer">
+  <div class="modal">
+    <h2 id="mpTitle">Nuevo Jugador</h2>
+    <div class="grid2">
+      <div class="form-group"><label>Nombre</label><input id="mpName" placeholder="Nombre completo"></div>
+      <div class="form-group"><label>Posición</label><input id="mpPos" placeholder="Ej: Lateral derecho"></div>
+    </div>
+    <div class="form-group"><label>Número</label><input id="mpNum" type="number" placeholder="10" style="width:80px"></div>
+    <hr class="divider">
+    <h3>Acciones a evaluar</h3>
+    <p style="font-size:12px;color:var(--muted);margin-bottom:8px">Define cada acción con su criterio de éxito y fallo.</p>
+    <div id="mpTagList" style="margin-bottom:10px"></div>
+    <div style="display:flex;flex-direction:column;gap:6px">
+      <input id="mpTagInput" placeholder="Nombre de la acción — Ej: Escanear antes de recibir">
+      <input id="mpTagDescYes" placeholder="✅ ¿Qué significa ejecutarlo bien?">
+      <input id="mpTagDescNo" placeholder="❌ ¿Qué significa no ejecutarlo?" onkeydown="if(event.key==='Enter')addTagInput()">
+      <button class="btn btn-ghost btn-sm" style="align-self:flex-start" onclick="addTagInput()">+ Agregar acción</button>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('modalPlayer')">Cancelar</button>
+      <button class="btn btn-orange" onclick="savePlayer()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Confirmación -->
+<div class="modal-bg" id="modalConfirm">
+  <div class="modal" style="width:380px">
+    <h2 id="confirmTitle">¿Confirmar acción?</h2>
+    <p id="confirmMsg" style="font-size:13px;color:var(--muted);margin-bottom:16px;line-height:1.6"></p>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('modalConfirm')">Cancelar</button>
+      <button class="btn" id="confirmOkBtn" style="background:var(--danger);color:#fff">Eliminar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Cerrar Sesión -->
+<div class="modal-bg" id="modalSession">
+  <div class="modal">
+    <h2>Cerrar Sesión</h2>
+    <div id="scorePreview" style="background:#f9fafb;border:1px solid var(--border);border-radius:9px;padding:14px;margin-bottom:14px">
+      <h3 style="margin-bottom:10px">% Acierto por acción</h3>
+      <div id="scoreBreakdown"></div>
+      <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+        <span style="font-size:13px;font-weight:600">Acierto global</span>
+        <span id="scoreGlobal" style="font-size:22px;font-weight:800"></span>
+      </div>
+    </div>
+    <div class="form-group"><label>Rival / Partido</label><input id="msRival" placeholder="Ej: Nacional U20"></div>
+    <div class="form-group"><label>Minutos jugados</label><input id="msMin" type="number" placeholder="90" style="width:100px"></div>
+    <div class="form-group"><label>Observaciones</label><textarea id="msObs" rows="2" placeholder="Notas del analista..."></textarea></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('modalSession')">Cancelar</button>
+      <button class="btn btn-green" onclick="saveSession()">Guardar Sesión</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Detalle + Video -->
+<div class="modal-bg" id="modalDetail">
+  <div class="modal" style="width:620px;max-width:97vw">
+    <h2 id="mdTitle"></h2>
+    <div id="mdContent"></div>
+    <div style="background:#f9fafb;border:1px solid var(--border);border-radius:9px;padding:14px;margin-top:12px">
+      <h3 style="margin-bottom:10px">📹 Revisión en Video</h3>
+      <div id="mdVidPlaceholder" class="vid-placeholder" onclick="document.getElementById('mdVidInput').click()">
+        <div style="font-size:26px">🎬</div>
+        <div>Adjuntar grabación del partido</div>
+        <div style="font-size:11px;color:var(--muted)">MP4, MOV — procesado localmente</div>
+      </div>
+      <div id="mdVidWrap" style="display:none">
+        <div class="tl-wrap" id="mdTlWrap"><div class="tl-prog" id="mdTlProg"></div><div class="tl-marks" id="mdTlMarks"></div></div>
+        <div class="clip-box" style="margin-top:8px">
+          <video id="mdVideo" controls></video>
+          <div class="clip-controls">
+            <div style="font-size:11px;color:#aaa" id="clipLabel">Toca un timestamp del log para ver el clip</div>
+            <div class="clip-range-row">
+              <span style="white-space:nowrap">Antes:</span>
+              <input type="range" id="clipBefore" min="1" max="30" value="5" oninput="updateClipRange()">
+              <span id="clipBeforeVal" style="min-width:26px">5s</span>
+              <span style="white-space:nowrap;margin-left:8px">Después:</span>
+              <input type="range" id="clipAfter" min="1" max="30" value="5" oninput="updateClipRange()">
+              <span id="clipAfterVal" style="min-width:26px">5s</span>
+            </div>
+            <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+              <button class="btn btn-ghost btn-sm" id="clipReplayBtn" onclick="replayClip()" style="display:none;color:#fff;border-color:#444">↩ Replay</button>
+            </div>
+          </div>
+        </div>
+        <!-- COMPILADO -->
+        <div style="margin-top:12px;padding:12px;background:#1a1a1a;border-radius:8px">
+          <div style="font-size:12px;font-weight:700;color:#ddd;margin-bottom:10px">🎬 Compilado por Acción</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px" id="compileActionBtns"></div>
+          <div id="compileStatus" style="font-size:12px;color:#aaa;margin-bottom:8px"></div>
+          <!-- Canvas oculto para grabación -->
+          <canvas id="compileCanvas" style="display:none"></canvas>
+          <div id="compileProgressWrap" style="display:none;margin-bottom:8px">
+            <div style="height:6px;background:#333;border-radius:3px;overflow:hidden">
+              <div id="compileProgressBar" style="height:100%;width:0%;background:#F0601A;border-radius:3px;transition:width .3s"></div>
+            </div>
+            <div id="compileProgressLabel" style="font-size:11px;color:#aaa;margin-top:4px;text-align:center"></div>
+          </div>
+          <div style="display:flex;gap:6px">
+            <button class="btn btn-sm" id="compilarBtn" onclick="startCompile()" style="background:#F0601A;color:#fff;display:none">⬇ Generar y Descargar</button>
+            <button class="btn btn-ghost btn-sm" id="cancelCompileBtn" onclick="cancelCompile()" style="display:none;color:#fff;border-color:#444">✕ Cancelar</button>
+          </div>
+        </div>
+        <div class="flex mt" style="gap:6px">
+          <label style="margin:0;white-space:nowrap;font-size:12px;color:var(--muted)">Offset (seg):</label>
+          <input id="mdOffset" type="number" value="0" style="width:78px" oninput="updateMdOffset()">
+          <span style="font-size:11px;color:var(--muted)">Diferencia entre cronómetro y video</span>
+        </div>
+      </div>
+      <input type="file" id="mdVidInput" accept="video/*" style="display:none" onchange="loadDetailVideo(this)">
+    </div>
+    <div class="modal-actions"><button class="btn btn-ghost" onclick="closeModal('modalDetail')">Cerrar</button></div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script>
+var players = JSON.parse(localStorage.getItem('efc_players') || '[]');
+var sessions = JSON.parse(localStorage.getItem('efc_sessions') || '[]');
+var editingId = null, tempTags = [], liveLog = [];
+var period = 0, secs1 = 0, secs2 = 0, int1 = null, int2 = null;
+var mdOffset = 0, mdVidDur = 0, currentSess = null;
+var mdVideoSrc = null, mdVideoSessionId = null; // persisten entre aperturas
+var clipStartSecs = null, clipBeforeSecs = 5, clipAfterSecs = 5;
+var chartGlobal = null, actionCharts = {};
+
+function save() { localStorage.setItem('efc_players', JSON.stringify(players)); localStorage.setItem('efc_sessions', JSON.stringify(sessions)); }
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2); }
+function ini(n) { return n.split(' ').map(function(w){return w[0];}).join('').toUpperCase().slice(0,2); }
+var PCOLS = ['#F0601A','#007818','#e84040','#f5a623','#8b5cf6','#06b6d4'];
+function pColor(id) { var i = players.findIndex(function(p){return p.id===id;}); return PCOLS[i % PCOLS.length] || PCOLS[0]; }
+function fmt(s) { s = Math.max(0, Math.round(s)); return String(Math.floor(s/60)).padStart(2,'0') + ':' + String(s%60).padStart(2,'0'); }
+function fmtDate(d) { return new Date(d).toLocaleDateString('es-CO',{day:'2-digit',month:'short',year:'numeric'}); }
+function colPct(p) { return p>=90?'#007818':p>=70?'#9a6500':'#c02020'; }
+function bdg(p) { return p>=90?'bg':p>=70?'by':'br'; }
+function tagLabel(t) { return typeof t==='string' ? t : t.label; }
+function tagDescYes(t) { return typeof t==='string' ? '' : (t.descYes||''); }
+function tagDescNo(t) { return typeof t==='string' ? '' : (t.descNo||''); }
+
+function computeScores(log, tags) {
+  var bt = {};
+  tags.forEach(function(t){ bt[t] = {yes:0,no:0}; });
+  log.forEach(function(l){ if(!bt[l.action]) bt[l.action]={yes:0,no:0}; if(l.result==='yes') bt[l.action].yes++; else bt[l.action].no++; });
+  var ty=0, tn=0;
+  Object.values(bt).forEach(function(v){ ty+=v.yes; tn+=v.no; });
+  return { byTag: bt, globalPct: ty+tn>0 ? Math.round(ty/(ty+tn)*100) : null, totalYes: ty, totalNo: tn };
+}
+
+function candidacyScore(avg) {
+  if(avg===null) return null;
+  if(avg>=90) return 5;
+  if(avg>=75) return 4;
+  if(avg>=60) return 3;
+  if(avg>=45) return 2;
+  return 1;
+}
+var CAND_NAMES = ['','Iniciando','En proceso','Desarrollando','Consolidando','Candidato a ascenso'];
+var CAND_COLORS = ['','#e84040','#f5a623','#c8c840','#90c840','#007818'];
+var CAND_DESC = ['','Etapa inicial. Definir plan de trabajo individual.','En construcción. Requiere seguimiento intensivo.','Progreso claro. Trabajar las acciones más débiles.','Muy cerca. Mantener rendimiento y consolidar.','Listo para evaluar ascenso al equipo profesional.'];
+
+function toast(msg, color) {
+  color = color || '#007818';
+  var t = document.createElement('div'); t.className='toast'; t.textContent=msg; t.style.background=color;
+  document.body.appendChild(t); setTimeout(function(){ t.remove(); }, 2500);
+}
+
+// NAV
+document.querySelectorAll('nav button').forEach(function(btn){
+  btn.addEventListener('click', function(){
+    document.querySelectorAll('nav button').forEach(function(b){ b.classList.remove('active'); });
+    document.querySelectorAll('.page').forEach(function(p){ p.classList.remove('active'); });
+    btn.classList.add('active');
+    var pg = btn.dataset.page;
+    document.getElementById('pg-'+pg).classList.add('active');
+    if(pg==='jugadores') renderPlayers();
+    if(pg==='live') populateLiveSelect();
+    if(pg==='historial'){ populateHistFilter(); renderHistorial(); }
+    if(pg==='dashboard') populateDashSelect();
+  });
+});
+
+// TIMERS
+function startPeriod(p) {
+  clearInterval(int1); clearInterval(int2);
+  document.getElementById('liveDot').style.display='inline';
+  if(p===1) {
+    int1 = setInterval(function(){ secs1++; document.getElementById('timer1').textContent=fmt(secs1); }, 1000);
+    period=1;
+    document.getElementById('btn1T').classList.add('running'); document.getElementById('btn2T').classList.remove('running');
+    document.getElementById('timer1').style.color='var(--orange)'; document.getElementById('timer2').style.color='var(--muted)';
+  } else {
+    int2 = setInterval(function(){ secs2++; document.getElementById('timer2').textContent=fmt(secs2); }, 1000);
+    period=2;
+    document.getElementById('btn2T').classList.add('running'); document.getElementById('btn1T').classList.remove('running');
+    document.getElementById('timer2').style.color='var(--orange)'; document.getElementById('timer1').style.color='var(--muted)';
+  }
+}
+function pausePeriod() {
+  clearInterval(int1); clearInterval(int2);
+  document.getElementById('liveDot').style.display='none';
+  document.getElementById('btn1T').classList.remove('running'); document.getElementById('btn2T').classList.remove('running');
+}
+function resetAll() {
+  pausePeriod(); secs1=0; secs2=0; period=0;
+  document.getElementById('timer1').textContent='00:00'; document.getElementById('timer2').textContent='00:00';
+  document.getElementById('timer1').style.color='var(--orange)'; document.getElementById('timer2').style.color='var(--muted)';
+}
+function getCurrentTime() {
+  if(period===1) return {secs:secs1, period:1, ts:fmt(secs1)};
+  if(period===2) return {secs:secs2, period:2, ts:fmt(secs2)};
+  return {secs:secs1, period:1, ts:fmt(secs1)};
+}
+
+// JUGADORES
+function renderPlayers() {
+  var el = document.getElementById('playerList');
+  if(!players.length){ el.innerHTML='<div class="empty">No hay jugadores. Agrega el primero.</div>'; return; }
+  el.innerHTML = players.map(function(p){
+    var chips = p.tags.slice(0,3).map(function(t){ return '<span class="chip">'+tagLabel(t)+'</span>'; }).join('');
+    if(p.tags.length>3) chips += '<span class="chip">+'+( p.tags.length-3)+'</span>';
+    return '<div class="player-card">'+
+      '<div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:8px">'+
+      '<div class="avatar" style="background:'+pColor(p.id)+';margin:0">'+ini(p.name)+'</div>'+
+      '<button onclick="deletePlayer(\''+p.id+'\')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:18px;line-height:1;padding:0" title="Eliminar jugador">×</button>'+
+      '</div>'+
+      '<div style="font-weight:700;font-size:14px;cursor:pointer" onclick="editPlayer(\''+p.id+'\')">'+p.name+'</div>'+
+      '<div style="font-size:12px;color:var(--muted);cursor:pointer" onclick="editPlayer(\''+p.id+'\')">'+( p.position||'—')+(p.number?' · #'+p.number:'')+'</div>'+
+      '<div style="margin-top:7px;display:flex;flex-wrap:wrap;gap:3px;cursor:pointer" onclick="editPlayer(\''+p.id+'\')">'+chips+'</div></div>';
+  }).join('');
+}
+function openNewPlayer() {
+  editingId=null; tempTags=[];
+  ['mpName','mpPos','mpNum','mpTagInput','mpTagDescYes','mpTagDescNo'].forEach(function(i){ document.getElementById(i).value=''; });
+  document.getElementById('mpTitle').textContent='Nuevo Jugador'; renderTempTags(); openModal('modalPlayer');
+}
+function editPlayer(id) {
+  var p = players.find(function(x){ return x.id===id; }); if(!p) return;
+  editingId=id; tempTags=p.tags.map(function(t){ return typeof t==='string'?{label:t,descYes:'',descNo:''}:t; });
+  document.getElementById('mpName').value=p.name; document.getElementById('mpPos').value=p.position||''; document.getElementById('mpNum').value=p.number||'';
+  ['mpTagInput','mpTagDescYes','mpTagDescNo'].forEach(function(i){ document.getElementById(i).value=''; });
+  document.getElementById('mpTitle').textContent='Editar Jugador'; renderTempTags(); openModal('modalPlayer');
+}
+function addTagInput() {
+  var v=document.getElementById('mpTagInput').value.trim(); if(!v) return;
+  tempTags.push({ label:v, descYes:document.getElementById('mpTagDescYes').value.trim(), descNo:document.getElementById('mpTagDescNo').value.trim() });
+  ['mpTagInput','mpTagDescYes','mpTagDescNo'].forEach(function(i){ document.getElementById(i).value=''; });
+  renderTempTags();
+}
+function renderTempTags() {
+  document.getElementById('mpTagList').innerHTML = tempTags.map(function(t,i){
+    var lbl = tagLabel(t), dy = tagDescYes(t), dn = tagDescNo(t);
+    return '<div style="background:#f9fafb;border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:start;gap:8px">'+
+      '<div style="flex:1"><div style="font-size:13px;font-weight:600;margin-bottom:3px">'+lbl+'</div>'+
+      (dy?'<div style="font-size:11px;color:#007818">✅ '+dy+'</div>':'')+
+      (dn?'<div style="font-size:11px;color:#c02020;margin-top:2px">❌ '+dn+'</div>':'')+
+      '</div><span style="cursor:pointer;color:var(--muted);font-size:15px;flex-shrink:0" onclick="removeTag('+i+')">✕</span></div>';
+  }).join('');
+}
+function showConfirm(title, msg, onOk) {
+  document.getElementById('confirmTitle').textContent = title;
+  document.getElementById('confirmMsg').textContent = msg;
+  var btn = document.getElementById('confirmOkBtn');
+  btn.onclick = function(){ closeModal('modalConfirm'); onOk(); };
+  openModal('modalConfirm');
+}
+
+function deletePlayer(id) {
+  var p = players.find(function(x){ return x.id===id; });
+  if(!p) return;
+  var sessCount = sessions.filter(function(s){ return s.playerId===id; }).length;
+  var msg = 'Se eliminará el perfil de '+p.name+'.';
+  if(sessCount>0) msg += ' Sus '+sessCount+' sesión'+(sessCount!==1?'es':'')+' registrada'+(sessCount!==1?'s':'')+' se conservarán en el historial.';
+  showConfirm('Eliminar jugador', msg, function(){
+    players = players.filter(function(x){ return x.id!==id; });
+    save(); renderPlayers();
+  });
+}
+
+function deleteSession(id) {
+  var s = sessions.find(function(x){ return x.id===id; });
+  if(!s) return;
+  showConfirm('Eliminar sesión', 'Se eliminará la sesión de '+s.playerName+' vs '+s.rival+' ('+fmtDate(s.date)+'). Esta acción no se puede deshacer.', function(){
+    sessions = sessions.filter(function(x){ return x.id!==id; });
+    save(); renderHistorial();
+  });
+}
+function savePlayer() {
+  var name = document.getElementById('mpName').value.trim(); if(!name){ toast('Nombre requerido','#e84040'); return; }
+  var tags = tempTags.map(function(t){ return typeof t==='string'?{label:t,descYes:'',descNo:''}:t; });
+  if(editingId){ var p=players.find(function(x){return x.id===editingId;}); p.name=name; p.position=document.getElementById('mpPos').value.trim(); p.number=document.getElementById('mpNum').value; p.tags=tags; }
+  else players.push({id:uid(),name:name,position:document.getElementById('mpPos').value.trim(),number:document.getElementById('mpNum').value,tags:tags});
+  save(); closeModal('modalPlayer'); renderPlayers();
+}
+
+// LIVE
+function populateLiveSelect() {
+  document.getElementById('livePlayer').innerHTML = '<option value="">— Seleccionar —</option>' +
+    players.map(function(p){ return '<option value="'+p.id+'">'+p.name+'</option>'; }).join('');
+}
+function loadLivePlayer() {
+  var id = document.getElementById('livePlayer').value;
+  document.getElementById('liveMain').style.display = id ? 'block' : 'none';
+  if(!id) return;
+  liveLog=[]; renderLiveLog();
+  renderTagGrid(players.find(function(x){return x.id===id;}).tags);
+}
+function renderTagGrid(tags) {
+  var g = document.getElementById('liveTagGrid');
+  if(!tags.length){ g.innerHTML='<div class="empty">Sin acciones. Edita el jugador.</div>'; return; }
+  g.innerHTML = tags.map(function(t){
+    var lbl = tagLabel(t), dy = tagDescYes(t), dn = tagDescNo(t);
+    var k = lbl.replace(/[^a-z0-9]/gi,'_');
+    var safe = lbl.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+    var descRow = '';
+    if(dy || dn) {
+      descRow += '<div style="display:flex;gap:8px;margin-top:8px">';
+      descRow += '<div style="flex:1;font-size:11px;color:#007818;background:rgba(0,120,24,.07);border-radius:5px;padding:5px 8px;line-height:1.5;min-height:28px">'+(dy||'')+'</div>';
+      descRow += '<div style="flex:1;font-size:11px;color:#c02020;background:rgba(232,64,64,.07);border-radius:5px;padding:5px 8px;line-height:1.5;min-height:28px">'+(dn||'')+'</div>';
+      descRow += '</div>';
+    }
+    return '<div class="tag-pair">'+
+      '<div class="tag-pair-label">⚡ '+lbl+'</div>'+
+      '<div class="tag-btns">'+
+      '<button class="tb-y" onclick="tagAction(\''+safe+'\',\'yes\',this)">✅ Ejecutó</button>'+
+      '<button class="tb-n" onclick="tagAction(\''+safe+'\',\'no\',this)">❌ No ejecutó</button>'+
+      '</div>'+descRow+
+      '<div class="pc" id="c_'+k+'">0 registros</div></div>';
+  }).join('');
+}
+function tagAction(action, result, btn) {
+  var cur = getCurrentTime();
+  liveLog.unshift({id:uid(), action:action, result:result, ts:cur.ts, secs:cur.secs, period:cur.period});
+  btn.style.opacity='.45'; setTimeout(function(){ btn.style.opacity='1'; }, 180);
+  var k = action.replace(/[^a-z0-9]/gi,'_');
+  var cnt = liveLog.filter(function(l){ return l.action===action; }).length;
+  var el = document.getElementById('c_'+k); if(el) el.textContent = cnt+' registro'+(cnt!==1?'s':'');
+  renderLiveLog(); updateLiveSummary();
+}
+function updateLiveSummary() {
+  var sc = computeScores(liveLog,[]), el = document.getElementById('liveSummary');
+  if(sc.globalPct===null){ el.textContent=''; return; }
+  el.innerHTML = 'Acierto: <strong style="color:'+colPct(sc.globalPct)+'">'+sc.globalPct+'%</strong> ('+sc.totalYes+'✅ '+sc.totalNo+'❌)';
+}
+function renderLiveLog() {
+  var el=document.getElementById('liveLog'), em=document.getElementById('liveLogEmpty');
+  if(!liveLog.length){ el.innerHTML=''; em.style.display='block'; return; }
+  em.style.display='none';
+  el.innerHTML = liveLog.map(function(l){
+    return '<div class="log-item">'+
+      '<span class="log-ts">⏱'+l.ts+'</span>'+
+      '<span class="log-period">'+l.period+'T</span>'+
+      '<span class="log-icon">'+(l.result==='yes'?'✅':'❌')+'</span>'+
+      '<span class="log-act">'+l.action+'</span>'+
+      '<span class="log-del" onclick="delLog(\''+l.id+'\')">×</span></div>';
+  }).join('');
+}
+function delLog(id) { liveLog=liveLog.filter(function(x){return x.id!==id;}); renderLiveLog(); updateLiveSummary(); }
+
+function openCloseSession() {
+  var pid = document.getElementById('livePlayer').value; if(!pid) return;
+  var p = players.find(function(x){return x.id===pid;});
+  var labels = p.tags.map(tagLabel);
+  var sc = computeScores(liveLog, labels);
+  var col = function(pct){ return pct>=90?'#007818':pct>=70?'#9a6500':'#c02020'; };
+  document.getElementById('scoreBreakdown').innerHTML = labels.map(function(t){
+    var d=sc.byTag[t]||{yes:0,no:0}; var tot=d.yes+d.no; var pct=tot>0?Math.round(d.yes/tot*100):null;
+    var c=pct!==null?col(pct):'var(--muted)';
+    return '<div style="margin-bottom:9px">'+
+      '<div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:2px">'+
+      '<span>'+t+'</span><span style="font-weight:700;color:'+c+'">'+(pct!==null?pct+'%':'—')+
+      ' <span style="font-size:11px;color:var(--muted)">('+d.yes+'✅ '+d.no+'❌)</span></span></div>'+
+      '<div class="pbar"><div class="pbar-fill" style="width:'+(pct||0)+'%;background:'+(pct!==null?col(pct):'var(--border)')+'"></div></div></div>';
+  }).join('') || '<div class="empty">Sin acciones</div>';
+  var gc = sc.globalPct!==null ? col(sc.globalPct) : 'var(--muted)';
+  document.getElementById('scoreGlobal').style.color=gc;
+  document.getElementById('scoreGlobal').textContent = sc.globalPct!==null ? sc.globalPct+'%' : '—';
+  ['msRival','msObs'].forEach(function(i){ document.getElementById(i).value=''; });
+  document.getElementById('msMin').value='';
+  openModal('modalSession');
+}
+function saveSession() {
+  var pid = document.getElementById('livePlayer').value; if(!pid) return;
+  var p = players.find(function(x){return x.id===pid;});
+  var labels = p.tags.map(tagLabel);
+  var sc = computeScores(liveLog, labels);
+  sessions.push({
+    id:uid(), playerId:pid, playerName:p.name, date:new Date().toISOString(),
+    rival:document.getElementById('msRival').value.trim()||'—',
+    minutes:parseInt(document.getElementById('msMin').value)||0,
+    obs:document.getElementById('msObs').value.trim(),
+    log:[].concat(liveLog), scores:{byTag:sc.byTag, globalPct:sc.globalPct},
+    // Snapshot de acciones al momento de la sesión
+    tagSnapshot: p.tags.map(function(t){
+      return typeof t==='string'?{label:t,descYes:'',descNo:''}:t;
+    })
+  });
+  save(); closeModal('modalSession'); liveLog=[]; renderLiveLog(); updateLiveSummary(); resetAll();
+  document.getElementById('livePlayer').value=''; document.getElementById('liveMain').style.display='none';
+  toast('✅ Sesión guardada','#007818');
+}
+
+// HISTORIAL
+function populateHistFilter() {
+  var sel=document.getElementById('histFilter'), cur=sel.value;
+  sel.innerHTML = '<option value="">Todos los jugadores</option>' + players.map(function(p){ return '<option value="'+p.id+'">'+p.name+'</option>'; }).join('');
+  sel.value=cur;
+}
+function renderHistorial() {
+  var filt = document.getElementById('histFilter').value;
+  var list = (filt ? sessions.filter(function(s){return s.playerId===filt;}) : sessions).slice().sort(function(a,b){return new Date(b.date)-new Date(a.date);});
+  var tb=document.getElementById('histTable'), em=document.getElementById('histEmpty');
+  if(!list.length){ tb.innerHTML=''; em.style.display='block'; return; }
+  em.style.display='none';
+  tb.innerHTML = list.map(function(s){
+    var pct=s.scores&&s.scores.globalPct!=null?s.scores.globalPct:null;
+    return '<tr><td><strong>'+s.playerName+'</strong></td><td>'+fmtDate(s.date)+'</td><td>'+s.rival+'</td><td>'+s.minutes+"'</td><td style=\"color:var(--muted)\">"+s.log.length+'</td>'+
+      '<td>'+(pct!=null?'<span class="badge '+bdg(pct)+'">'+pct+'%</span>':'—')+'</td>'+
+      '<td><button class="btn btn-ghost btn-sm" onclick="openDetail(\''+s.id+'\')" style="margin-right:4px">Ver / Video</button>'+
+      '<button class="btn btn-sm" onclick="deleteSession(\''+s.id+'\')" style="background:rgba(232,64,64,.08);border:1px solid rgba(232,64,64,.2);color:#c02020">✕</button></td></tr>';
+  }).join('');
+}
+
+// DETAIL + VIDEO
+function openDetail(sid) {
+  currentSess = sessions.find(function(x){return x.id===sid;}); if(!currentSess) return;
+  var s=currentSess, p=players.find(function(x){return x.id===s.playerId;});
+  var labels = (p?p.tags:[]).map(tagLabel);
+  var sc = s.scores || computeScores(s.log, labels);
+  var col = function(pct){ return pct>=90?'#007818':pct>=70?'#9a6500':'#c02020'; };
+  var breakdown = labels.map(function(t){
+    var d=sc.byTag[t]||{yes:0,no:0}; var tot=d.yes+d.no; var pct=tot>0?Math.round(d.yes/tot*100):null;
+    var c=pct!==null?col(pct):'var(--muted)';
+    return '<div style="margin-bottom:8px">'+
+      '<div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:2px">'+
+      '<span>'+t+'</span><span style="color:'+c+';font-weight:700">'+(pct!==null?pct+'%':'—')+
+      ' <span style="font-size:11px;color:var(--muted)">('+d.yes+'✅ '+d.no+'❌)</span></span></div>'+
+      '<div class="pbar"><div class="pbar-fill" style="width:'+(pct||0)+'%;background:'+(pct!==null?col(pct):'var(--border)')+'"></div></div></div>';
+  }).join('');
+  var logHtml = s.log.map(function(l){
+    return '<div class="log-item">'+
+      '<span class="log-ts click" onclick="playClip('+l.secs+')" title="Ver clip">⏱'+l.ts+'</span>'+
+      '<span class="log-period">'+l.period+'T</span>'+
+      '<span class="log-icon">'+(l.result==='yes'?'✅':'❌')+'</span>'+
+      '<span class="log-act">'+l.action+'</span></div>';
+  }).join('') || '<div class="empty">Vacío</div>';
+  document.getElementById('mdTitle').textContent = s.playerName+' · '+s.rival;
+  document.getElementById('mdContent').innerHTML =
+    '<div class="grid2" style="margin-bottom:10px">'+
+    '<div class="stat-box"><div class="val">'+s.minutes+"'</div><div class=\"lbl\">Minutos</div></div>"+
+    '<div class="stat-box"><div class="val" style="color:'+(sc.globalPct!=null?col(sc.globalPct):'var(--muted)')+'">'+
+    (sc.globalPct!=null?sc.globalPct+'%':'—')+'</div><div class="lbl">Acierto global</div></div></div>'+
+    '<div style="font-size:12px;color:var(--muted);margin-bottom:10px">📅 '+new Date(s.date).toLocaleString('es-CO')+'</div>'+
+    (s.obs?'<div style="background:#f9fafb;border-radius:7px;padding:9px;font-size:13px;margin-bottom:10px;border:1px solid var(--border)">'+s.obs+'</div>':'')+
+    '<h3 style="margin-bottom:8px">Acierto por acción</h3>'+(breakdown||'<div class="empty">Sin datos</div>')+
+    '<h3 style="margin:12px 0 7px">Log ('+s.log.length+')</h3>'+
+    '<div class="log-list" style="max-height:150px">'+logHtml+'</div>';
+  // Si es la misma sesión y ya hay video cargado, no destruir
+  var sameSession = (mdVideoSessionId === sid) && mdVideoSrc;
+  mdOffset = 0;
+  document.getElementById('mdOffset').value = 0;
+
+  if(!sameSession) {
+    // Nueva sesión — resetear video
+    mdVidDur = 0; mdVideoSrc = null; mdVideoSessionId = null;
+    document.getElementById('mdVidPlaceholder').style.display = 'flex';
+    document.getElementById('mdVidWrap').style.display = 'none';
+    document.getElementById('clipReplayBtn').style.display = 'none';
+    document.getElementById('clipLabel').textContent = 'Toca un timestamp del log para ver el clip';
+    var vid = document.getElementById('mdVideo');
+    vid.pause(); vid.removeAttribute('src'); vid.load();
+    document.getElementById('mdTlMarks').innerHTML = '';
+    document.getElementById('mdTlProg').style.width = '0%';
+  } else {
+    // Misma sesión — video ya cargado, solo refrescar timeline y markers
+    renderDetailTimeline();
+  }
+  mdVideoSessionId = sid;
+  openModal('modalDetail');
+}
+function loadDetailVideo(input) {
+  var file = input.files[0]; if(!file) return;
+  // Revocar ObjectURL anterior si existe
+  if(mdVideoSrc) URL.revokeObjectURL(mdVideoSrc);
+  mdVideoSrc = URL.createObjectURL(file);
+  var vid = document.getElementById('mdVideo');
+  vid.src = mdVideoSrc;
+  document.getElementById('mdVidPlaceholder').style.display = 'none';
+  document.getElementById('mdVidWrap').style.display = 'block';
+  vid.addEventListener('loadedmetadata', function(){ mdVidDur = vid.duration; renderDetailTimeline(); });
+  vid.addEventListener('timeupdate', function(){ if(mdVidDur>0) document.getElementById('mdTlProg').style.width=(vid.currentTime/mdVidDur*100)+'%'; });
+  // Limpiar el input para permitir seleccionar el mismo archivo de nuevo
+  input.value = '';
+}
+function updateMdOffset(){ mdOffset=parseFloat(document.getElementById('mdOffset').value)||0; renderDetailTimeline(); }
+function renderDetailTimeline() {
+  var wrap=document.getElementById('mdTlMarks'); wrap.innerHTML='';
+  if(!mdVidDur||!currentSess) return;
+  currentSess.log.forEach(function(l){
+    var adj=l.secs+mdOffset, pct=Math.min(100,Math.max(0,(adj/mdVidDur)*100));
+    var dot=document.createElement('div');
+    Object.assign(dot.style,{position:'absolute',left:pct+'%',top:'3px',bottom:'3px',width:'4px',borderRadius:'2px',background:l.result==='yes'?'#007818':'#e84040',cursor:'pointer',transform:'translateX(-50%)'});
+    dot.title=(l.result==='yes'?'✅':'❌')+' '+l.action+' · '+l.ts+' ('+l.period+'T)';
+    dot.onclick=function(){ playClip(l.secs); };
+    wrap.appendChild(dot);
+  });
+}
+document.getElementById('mdTlWrap').addEventListener('click', function(e){
+  var rect=e.currentTarget.getBoundingClientRect(), vid=document.getElementById('mdVideo');
+  if(vid.src&&mdVidDur) vid.currentTime=((e.clientX-rect.left)/rect.width)*mdVidDur;
+});
+function playClip(secs) {
+  clipStartSecs=secs;
+  var vid=document.getElementById('mdVideo');
+  if(!vid.src){ toast('Primero adjunta el video','#e84040'); return; }
+  var start=Math.max(0,secs+mdOffset-clipBeforeSecs), end=secs+mdOffset+clipAfterSecs;
+  document.getElementById('clipLabel').textContent='Clip: '+fmt(secs)+' ('+clipBeforeSecs+'s antes · '+clipAfterSecs+'s después)';
+  document.getElementById('clipReplayBtn').style.display='inline-flex';
+  vid.currentTime=start; vid.play();
+  var stopAt=function(){ if(vid.currentTime>=end){ vid.pause(); vid.removeEventListener('timeupdate',stopAt); } };
+  vid.addEventListener('timeupdate',stopAt);
+}
+function replayClip(){ if(clipStartSecs!==null) playClip(clipStartSecs); }
+function updateClipRange(){
+  clipBeforeSecs=parseInt(document.getElementById('clipBefore').value);
+  clipAfterSecs=parseInt(document.getElementById('clipAfter').value);
+  document.getElementById('clipBeforeVal').textContent=clipBeforeSecs+'s';
+  document.getElementById('clipAfterVal').textContent=clipAfterSecs+'s';
+}
+
+// ===== COMPILADO =====
+var compileAborted = false;
+
+function buildCompileButtons() {
+  if(!currentSess) return;
+  var actions = {};
+  currentSess.log.forEach(function(l){ actions[l.action] = (actions[l.action]||0)+1; });
+  var wrap = document.getElementById('compileActionBtns');
+  wrap.innerHTML = '';
+  document.getElementById('compilarBtn').style.display = 'none';
+  document.getElementById('compileStatus').textContent = '';
+  if(!Object.keys(actions).length){ wrap.innerHTML='<span style="font-size:12px;color:#666">Sin acciones en esta sesión</span>'; return; }
+  Object.keys(actions).forEach(function(action){
+    var btn = document.createElement('button');
+    btn.className = 'btn btn-sm';
+    btn.style.cssText = 'background:#2a2a2a;border:1px solid #444;color:#ddd;border-radius:20px;font-size:11px;';
+    btn.innerHTML = action + ' <span style="color:#F0601A;font-weight:700">' + actions[action] + '</span>';
+    btn.dataset.action = action;
+    btn.addEventListener('click', function(){
+      wrap.querySelectorAll('button').forEach(function(b){ b.style.background='#2a2a2a'; b.style.borderColor='#444'; b.style.color='#ddd'; });
+      btn.style.background = '#3a1a0a'; btn.style.borderColor = '#F0601A'; btn.style.color = '#F0601A';
+      document.getElementById('compilarBtn').style.display = 'inline-flex';
+      document.getElementById('compilarBtn').dataset.action = action;
+      var count = actions[action];
+      var dur = count * (clipBeforeSecs + clipAfterSecs);
+      document.getElementById('compileStatus').textContent = count + ' clip' + (count!==1?'s':'') + ' · duración aprox. ' + dur + ' seg · exportación en tiempo real';
+    });
+    wrap.appendChild(btn);
+  });
+}
+
+function startCompile() {
+  var action = document.getElementById('compilarBtn').dataset.action;
+  if(!action || !currentSess) return;
+  var vid = document.getElementById('mdVideo');
+  if(!vid.src){ alert('Primero adjunta el video'); return; }
+  var clips = currentSess.log.filter(function(l){ return l.action === action; }).reverse(); // cronológico
+  if(!clips.length) return;
+
+  compileAborted = false;
+  document.getElementById('compilarBtn').style.display = 'none';
+  document.getElementById('cancelCompileBtn').style.display = 'inline-flex';
+  document.getElementById('compileProgressWrap').style.display = 'block';
+  document.getElementById('compileProgressBar').style.width = '0%';
+  document.getElementById('compileStatus').textContent = 'Preparando...';
+
+  // Setup canvas matching video dimensions
+  var canvas = document.getElementById('compileCanvas');
+  vid.addEventListener('loadedmetadata', function onMeta(){
+    canvas.width = vid.videoWidth || 1280;
+    canvas.height = vid.videoHeight || 720;
+    vid.removeEventListener('loadedmetadata', onMeta);
+  });
+  if(vid.videoWidth) { canvas.width = vid.videoWidth; canvas.height = vid.videoHeight; }
+  else { canvas.width = 1280; canvas.height = 720; }
+
+  var ctx = canvas.getContext('2d');
+  var stream = canvas.captureStream(30);
+
+  // Try preferred codecs
+  var mimeType = '';
+  var candidates = ['video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm','video/mp4'];
+  for(var i=0;i<candidates.length;i++){ if(MediaRecorder.isTypeSupported(candidates[i])){ mimeType=candidates[i]; break; } }
+
+  var recorder = new MediaRecorder(stream, mimeType ? {mimeType:mimeType} : {});
+  var chunks = [];
+  recorder.ondataavailable = function(e){ if(e.data.size>0) chunks.push(e.data); };
+  recorder.onstop = function(){
+    if(compileAborted){ resetCompileUI(); return; }
+    var blob = new Blob(chunks, {type: mimeType||'video/webm'});
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url; a.download = (currentSess.playerName+'_'+action+'_compilado').replace(/\s+/g,'_')+'.webm';
+    a.click();
+    setTimeout(function(){ URL.revokeObjectURL(url); },3000);
+    document.getElementById('compileStatus').textContent = '✅ Compilado descargado';
+    resetCompileUI();
+  };
+
+  recorder.start();
+  var frameLoop = null;
+  function drawLoop(){ if(!compileAborted){ ctx.drawImage(vid,0,0,canvas.width,canvas.height); frameLoop=requestAnimationFrame(drawLoop); } }
+  drawLoop();
+
+  var clipIndex = 0;
+  function playNextClip(){
+    if(compileAborted || clipIndex >= clips.length){
+      cancelAnimationFrame(frameLoop);
+      recorder.stop();
+      return;
+    }
+    var pct = Math.round((clipIndex/clips.length)*100);
+    document.getElementById('compileProgressBar').style.width = pct+'%';
+    document.getElementById('compileProgressLabel').textContent = 'Clip '+(clipIndex+1)+' de '+clips.length+' — '+clips[clipIndex].action;
+    document.getElementById('compileStatus').textContent = 'Grabando clip '+(clipIndex+1)+'/'+clips.length+'...';
+
+    var secs = clips[clipIndex].secs;
+    var start = Math.max(0, secs + mdOffset - clipBeforeSecs);
+    var end = secs + mdOffset + clipAfterSecs;
+    vid.currentTime = start;
+
+    vid.onseeked = function(){
+      vid.onseeked = null;
+      vid.play();
+      function checkEnd(){
+        if(compileAborted){ vid.pause(); vid.ontimeupdate=null; cancelAnimationFrame(frameLoop); recorder.stop(); return; }
+        if(vid.currentTime >= end){
+          vid.pause(); vid.ontimeupdate=null;
+          clipIndex++;
+          setTimeout(playNextClip, 80); // pequeña pausa entre clips
+        }
+      }
+      vid.ontimeupdate = checkEnd;
+    };
+  }
+  playNextClip();
+}
+
+function cancelCompile(){
+  compileAborted = true;
+  var vid = document.getElementById('mdVideo');
+  vid.pause(); vid.ontimeupdate=null;
+  document.getElementById('compileStatus').textContent = 'Cancelado.';
+  resetCompileUI();
+}
+
+function resetCompileUI(){
+  document.getElementById('cancelCompileBtn').style.display='none';
+  document.getElementById('compileProgressWrap').style.display='none';
+  document.getElementById('compileProgressBar').style.width='0%';
+  document.getElementById('compilarBtn').style.display='inline-flex';
+}
+
+// DASHBOARD
+function populateDashSelect() {
+  var sel=document.getElementById('dashPlayer'), cur=sel.value;
+  sel.innerHTML='<option value="">— Seleccionar jugador —</option>'+players.map(function(p){return '<option value="'+p.id+'">'+p.name+'</option>';}).join('');
+  sel.value=cur; if(cur) renderDashboard();
+}
+function showActionChart(lbl, entry, labels, chartOpts) {
+  var wrap=document.getElementById('actionChartsWrap');
+  Object.values(actionCharts).forEach(function(c){ try{c.destroy();}catch(e){} });
+  actionCharts={};
+  var info=entry.info, data=entry.data;
+  var activeTag=info.active
+    ?'<span style="font-size:10px;background:rgba(0,120,24,.12);color:#007818;border-radius:4px;padding:1px 6px;margin-left:6px;font-weight:600">Activa</span>'
+    :'<span style="font-size:10px;background:rgba(100,100,100,.1);color:#6b7a8a;border-radius:4px;padding:1px 6px;margin-left:6px;font-weight:600">Retirada</span>';
+  var cid='ac_single_'+Math.random().toString(36).slice(2,6);
+  wrap.innerHTML='<h2 style="font-size:13px;display:flex;align-items:center;margin-bottom:12px">⚡ '+lbl+activeTag+'</h2><canvas id="'+cid+'" height="180"></canvas>';
+  setTimeout(function(){
+    var el=document.getElementById(cid); if(!el) return;
+    actionCharts[cid]=new Chart(el,{
+      type:'line',
+      data:{labels:labels,datasets:[{
+        label:'% Acierto',data:data,
+        borderColor:info.active?'#F0601A':'#9ca3af',
+        backgroundColor:info.active?'rgba(240,96,26,.07)':'rgba(156,163,175,.07)',
+        tension:.4,fill:true,pointRadius:5,pointHoverRadius:7,
+        pointBackgroundColor:data.map(function(v){return v===null?'#6b7a8a':colPct(v);}),
+        pointBorderColor:'#fff',pointBorderWidth:2
+      }]},
+      options:chartOpts
+    });
+  },30);
+}
+
+function renderDashboard() {
+  var id=document.getElementById('dashPlayer').value;
+  var con=document.getElementById('dashContent'), em=document.getElementById('dashEmpty');
+  if(!id){ con.style.display='none'; em.style.display='block'; em.textContent='Selecciona un jugador'; return; }
+  var pSess=sessions.filter(function(s){return s.playerId===id;}).slice().sort(function(a,b){return new Date(a.date)-new Date(b.date);});
+  if(!pSess.length){ con.style.display='none'; em.style.display='block'; em.textContent='Sin sesiones aún.'; return; }
+  em.style.display='none'; con.style.display='block';
+  var p=players.find(function(x){return x.id===id;});
+  var pcts=pSess.map(function(s){return s.scores&&s.scores.globalPct!=null?s.scores.globalPct:null;}).filter(function(x){return x!=null;});
+  var avgAc=pcts.length?Math.round(pcts.reduce(function(a,b){return a+b;},0)/pcts.length):null;
+  var cScore=candidacyScore(avgAc);
+  document.getElementById('dSess').textContent=pSess.length;
+  document.getElementById('dAcierto').textContent=avgAc!==null?avgAc+'%':'—';
+  document.getElementById('dAcierto').style.color=avgAc!==null?colPct(avgAc):'var(--muted)';
+  document.getElementById('dCandidacy').textContent=cScore!==null?cScore+'/5':'—/5';
+  document.getElementById('dCandidacy').style.color=cScore!==null?CAND_COLORS[cScore]:'var(--muted)';
+  // Scale
+  var segs=document.querySelectorAll('#scaleBar .scale-seg');
+  segs.forEach(function(s,i){ s.style.opacity=cScore!==null&&i<cScore?'1':'.2'; s.style.transform=cScore!==null&&i+1===cScore?'scaleY(1.4)':'scaleY(1)'; });
+  document.getElementById('candidacyLabel').textContent=cScore!==null?'Nivel '+cScore+' — '+CAND_NAMES[cScore]:'Sin datos suficientes';
+  document.getElementById('candidacyLabel').style.color=cScore!==null?CAND_COLORS[cScore]:'var(--muted)';
+  var labels=pSess.map(function(s){return fmtDate(s.date);});
+  var chartOpts = {
+    responsive:true,
+    scales:{
+      y:{min:0,max:100,ticks:{callback:function(v){return v+'%';},color:'#6b7a8a'},grid:{color:'rgba(0,0,0,.05)'}},
+      x:{ticks:{color:'#6b7a8a'},grid:{color:'rgba(0,0,0,.05)'}}
+    },
+    plugins:{legend:{labels:{color:'#1a1f26'}},tooltip:{callbacks:{label:function(ctx){return ctx.raw!==null?ctx.raw+'%':'Sin datos';}}}}
+  };
+  // Global chart
+  if(chartGlobal) chartGlobal.destroy();
+  chartGlobal=new Chart(document.getElementById('aciertoChart'),{
+    type:'line',
+    data:{labels:labels,datasets:[{
+      label:'% Acierto global',
+      data:pSess.map(function(s){return s.scores&&s.scores.globalPct!=null?s.scores.globalPct:null;}),
+      borderColor:'#F0601A',backgroundColor:'rgba(240,96,26,.08)',tension:.4,fill:true,
+      pointRadius:5,pointHoverRadius:7,
+      pointBackgroundColor:pSess.map(function(s){var pc=s.scores&&s.scores.globalPct!=null?s.scores.globalPct:null;return pc!=null?colPct(pc):'#6b7a8a';}),
+      pointBorderColor:'#fff',pointBorderWidth:2
+    }]},
+    options:chartOpts
+  });
+  // Per-action charts
+  Object.values(actionCharts).forEach(function(c){ try{c.destroy();}catch(e){} });
+  actionCharts={};
+  // Recopilar TODAS las acciones únicas de todas las sesiones (históricas + actuales)
+  var allTagMap = {};
+  var currentTagLabels = (p?p.tags:[]).map(tagLabel);
+  // Recorrer cada sesión y extraer su snapshot
+  pSess.forEach(function(s){
+    var snap = s.tagSnapshot || [];
+    // Fallback: si aún no tiene snapshot, usar log
+    if(!snap.length) {
+      s.log.forEach(function(l){ if(!allTagMap[l.action]) allTagMap[l.action]={label:l.action,descYes:'',descNo:'',active:false}; });
+    }
+    snap.forEach(function(t){
+      var lbl = tagLabel(t);
+      if(!allTagMap[lbl]) allTagMap[lbl]={label:lbl,descYes:tagDescYes(t),descNo:tagDescNo(t),active:false};
+    });
+  });
+  // Marcar activas
+  currentTagLabels.forEach(function(lbl){ if(allTagMap[lbl]) allTagMap[lbl].active=true; else allTagMap[lbl]={label:lbl,descYes:'',descNo:'',active:true}; });
+  var allTagLabels = Object.keys(allTagMap);
+
+  var wrap=document.getElementById('actionChartsWrap'); wrap.innerHTML='';
+  var selectorWrap=document.getElementById('actionSelectorWrap'); selectorWrap.innerHTML='';
+  var chartDataByLabel={};
+
+  // Build chart data for each action
+  allTagLabels.forEach(function(lbl){
+    var info=allTagMap[lbl];
+    var data=pSess.map(function(s){
+      var d=s.scores&&s.scores.byTag?s.scores.byTag[lbl]:null;
+      if(!d) return null;
+      var tot=d.yes+d.no; return tot>0?Math.round(d.yes/tot*100):null;
+    });
+    if(data.every(function(d){return d===null;})) return;
+    chartDataByLabel[lbl]={info:info,data:data};
+
+    // Selector button
+    var btn=document.createElement('button');
+    btn.className='btn btn-ghost btn-sm';
+    btn.style.cssText='border-radius:20px;font-size:12px;';
+    var dot=info.active?'<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#007818;margin-right:5px;vertical-align:middle"></span>':'<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#9ca3af;margin-right:5px;vertical-align:middle"></span>';
+    btn.innerHTML=dot+lbl;
+    btn.dataset.label=lbl;
+    btn.addEventListener('click',function(){
+      showActionChart(lbl,chartDataByLabel[lbl],labels,chartOpts);
+      selectorWrap.querySelectorAll('button').forEach(function(b){ b.style.background=''; b.style.color=''; b.style.borderColor=''; });
+      btn.style.background='rgba(240,96,26,.1)'; btn.style.color='var(--orange)'; btn.style.borderColor='var(--orange)';
+    });
+    selectorWrap.appendChild(btn);
+  });
+
+  if(!Object.keys(chartDataByLabel).length){
+    wrap.innerHTML='<div class="empty">Sin datos de acciones aún</div>';
+  } else {
+    // Auto-select first
+    var firstLabel=Object.keys(chartDataByLabel)[0];
+    showActionChart(firstLabel,chartDataByLabel[firstLabel],labels,chartOpts);
+    var firstBtn=selectorWrap.querySelector('[data-label="'+firstLabel+'"]');
+    if(firstBtn){ firstBtn.style.background='rgba(240,96,26,.1)'; firstBtn.style.color='var(--orange)'; firstBtn.style.borderColor='var(--orange)'; }
+  }
+  // Progress eval — usar TODAS las acciones históricas
+  var allLogs=pSess.reduce(function(a,s){return a.concat(s.log);},[]);
+  var tagLabels=allTagLabels;
+  var scAll=computeScores(allLogs,tagLabels);
+  var evalHtml='';
+  if(pcts.length>=2){
+    evalHtml+='<p>🎯 <strong>Acierto promedio:</strong> '+avgAc+'%</p>';
+    var ts=tagLabels.map(function(t){var d=scAll.byTag[t]||{yes:0,no:0};var tot=d.yes+d.no;return{t:t,pct:tot>0?Math.round(d.yes/tot*100):null};}).filter(function(x){return x.pct!==null;}).sort(function(a,b){return a.pct-b.pct;});
+    if(ts.length){
+      evalHtml+='<p>🔴 <strong>A trabajar:</strong> '+ts[0].t+' ('+ts[0].pct+'%)</p>';
+      evalHtml+='<p>✅ <strong>Punto fuerte:</strong> '+ts[ts.length-1].t+' ('+ts[ts.length-1].pct+'%)</p>';
+    }
+    if(cScore!==null){
+      evalHtml+='<div style="margin-top:10px;padding:12px;border-radius:8px;background:'+(cScore>=4?'rgba(0,120,24,.07)':cScore>=3?'rgba(245,166,35,.08)':'rgba(232,64,64,.07)')+';border:1px solid '+CAND_COLORS[cScore]+'">'+
+        '<strong style="color:'+CAND_COLORS[cScore]+'">Nivel '+cScore+'/5 — '+CAND_NAMES[cScore]+'</strong><br>'+
+        '<span style="font-size:13px">'+CAND_DESC[cScore]+'</span></div>';
+    }
+  } else { evalHtml='<p style="color:var(--muted)">Se necesitan al menos 2 sesiones para la evaluación.</p>'; }
+  document.getElementById('progressEval').innerHTML=evalHtml;
+}
+
+// MODALS
+function openModal(id){ document.getElementById(id).classList.add('open'); }
+function closeModal(id){ document.getElementById(id).classList.remove('open'); }
+document.querySelectorAll('.modal-bg').forEach(function(m){ m.addEventListener('click',function(e){ if(e.target===m) m.classList.remove('open'); }); });
+
+// INIT
+function migrateOldSessions() {
+  var changed = false;
+  sessions.forEach(function(s) {
+    if(!s.tagSnapshot) {
+      var p = players.find(function(x){ return x.id===s.playerId; });
+      if(p) {
+        s.tagSnapshot = p.tags.map(function(t){
+          return typeof t==='string'?{label:t,descYes:'',descNo:''}:t;
+        });
+      } else {
+        // Reconstruir desde el log si no hay jugador
+        var seen = {};
+        s.log.forEach(function(l){ seen[l.action]=true; });
+        s.tagSnapshot = Object.keys(seen).map(function(lbl){ return {label:lbl,descYes:'',descNo:''}; });
+      }
+      changed = true;
+    }
+  });
+  if(changed) save();
+}
+function init(){
+  if(!players.length){
+    players.push({id:'demo1',name:'Carlos Ríos',position:'Mediocampista',number:'8',tags:[
+      {label:'Escanear antes de recibir',descYes:'Mira el entorno al menos 2 veces antes del balón',descNo:'Recibe sin mirar, de espaldas al juego'},
+      {label:'Manejar perfil correcto',descYes:'Se orienta para ver el campo antes de controlar',descNo:'Controla sin perfil, pierde opciones de pase'},
+      {label:'Presión alta sin balón',descYes:'Presiona al portador con intensidad y dirección',descNo:'Camina o no presiona al rival'},
+      {label:'Conducción entre líneas',descYes:'Conduce hacia espacios entre defensas y medios',descNo:'Conduce hacia atrás o hacia zona sin peligro'},
+      {label:'Apoyo al portador',descYes:'Se ofrece en ángulo y distancia correcta',descNo:'No se mueve o se queda estático sin ofrecer opción'}
+    ]});
+    save();
+  }
+  migrateOldSessions();
+  renderPlayers();
+}
+init();
+</script>
+</body>
+</html>
