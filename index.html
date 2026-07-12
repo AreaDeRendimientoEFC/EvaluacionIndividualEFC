@@ -332,15 +332,30 @@ tr:hover td{background:#fafafa;}
     <div id="mdContent"></div>
     <div style="background:#f9fafb;border:1px solid var(--border);border-radius:9px;padding:14px;margin-top:12px">
       <h3 style="margin-bottom:10px">📹 Revisión en Video</h3>
-      <div id="mdVidPlaceholder" class="vid-placeholder" onclick="document.getElementById('mdVidInput').click()">
-        <div style="font-size:26px">🎬</div>
-        <div>Adjuntar grabación del partido</div>
-        <div style="font-size:11px;color:var(--muted)">MP4, MOV — procesado localmente</div>
+      <div id="mdVidPlaceholder" class="vid-placeholder" style="display:flex;flex-direction:column;gap:10px;padding:16px">
+        <div style="text-align:center;cursor:pointer" onclick="document.getElementById('mdVidInput').click()">
+          <div style="font-size:26px">🎬</div>
+          <div>Adjuntar archivo de video</div>
+          <div style="font-size:11px;color:var(--muted)">MP4, MOV — procesado solo en este dispositivo</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--muted)"><hr style="flex:1;border:none;border-top:1px solid var(--border)">o<hr style="flex:1;border:none;border-top:1px solid var(--border)"></div>
+        <div>
+          <div style="display:flex;gap:6px">
+            <input id="mdYtInput" placeholder="Pega el link de YouTube del partido..." style="flex:1" onkeydown="if(event.key==='Enter')attachYoutubeLink()">
+            <button class="btn btn-orange btn-sm" onclick="attachYoutubeLink()">🔗 Usar link</button>
+          </div>
+          <div style="font-size:10px;color:var(--muted);text-align:center;margin-top:5px">El link de YouTube queda guardado en la sesión — cualquiera lo ve, en cualquier dispositivo, sin adjuntar nada</div>
+        </div>
       </div>
       <div id="mdVidWrap" style="display:none">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <span style="font-size:11px;color:var(--muted)" id="mdVidModeLabel"></span>
+          <button class="btn btn-ghost btn-sm" style="padding:3px 8px;font-size:10px" onclick="resetSessionVideo()">🔄 Cambiar video</button>
+        </div>
         <div class="tl-wrap" id="mdTlWrap"><div class="tl-prog" id="mdTlProg"></div><div class="tl-marks" id="mdTlMarks"></div></div>
         <div class="clip-box" style="margin-top:8px">
-          <video id="mdVideo" controls></video>
+          <video id="mdVideo" controls style="display:none"></video>
+          <div id="mdYtPlayer" style="display:none"></div>
           <div class="clip-controls">
             <div style="font-size:11px;color:#aaa" id="clipLabel">Toca un timestamp del log para ver el clip</div>
             <div class="clip-range-row">
@@ -356,7 +371,7 @@ tr:hover td{background:#fafafa;}
             </div>
           </div>
         </div>
-        <div style="margin-top:12px;padding:12px;background:#1a1a1a;border-radius:8px">
+        <div id="mdCompileSection" style="margin-top:12px;padding:12px;background:#1a1a1a;border-radius:8px">
           <div style="font-size:12px;font-weight:700;color:#ddd;margin-bottom:10px">🎬 Compilado por Acción</div>
           <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px" id="compileActionBtns"></div>
           <div id="compileStatus" style="font-size:12px;color:#aaa;margin-bottom:8px"></div>
@@ -372,6 +387,7 @@ tr:hover td{background:#fafafa;}
             <button class="btn btn-ghost btn-sm" id="cancelCompileBtn" onclick="cancelCompile()" style="display:none;color:#fff;border-color:#444">✕ Cancelar</button>
           </div>
         </div>
+        <div id="mdYtNotice" style="display:none;margin-top:12px;padding:10px 12px;background:rgba(240,96,26,.06);border:1px solid rgba(240,96,26,.25);border-radius:8px;font-size:11px;color:var(--muted)">ℹ️ El compilado y descarga de clips solo está disponible con video adjuntado localmente (por restricciones de YouTube). Con un link de YouTube puedes ver y saltar a cada clip, pero no descargarlos.</div>
         <div class="flex mt" style="gap:6px">
           <label style="margin:0;white-space:nowrap;font-size:12px;color:var(--muted)">Offset (seg):</label>
           <input id="mdOffset" type="number" value="0" style="width:78px" oninput="updateMdOffset()">
@@ -387,12 +403,14 @@ tr:hover td{background:#fafafa;}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+<script src="https://www.youtube.com/iframe_api"></script>
 <script>
 var players=JSON.parse(localStorage.getItem('efc_players')||'[]');
 var sessions=JSON.parse(localStorage.getItem('efc_sessions')||'[]');
 var editingId=null,tempTags=[],liveRoster={},closingPlayerId=null;
 var period=0,secs1=0,secs2=0,int1=null,int2=null;
 var mdOffset=0,mdVidDur=0,currentSess=null,mdVideoSrc=null,mdVideoSessionId=null;
+var mdMode=null,ytPlayer=null,ytApiReady=false,ytPendingVideoId=null,mdProgressInterval=null,clipMonitorInterval=null;
 var clipStartSecs=null,clipBeforeSecs=5,clipAfterSecs=5,clipLastBefore=5,clipLastAfter=5;
 var chartGlobal=null,actionCharts={},compileAborted=false;
 
@@ -805,49 +823,144 @@ function openDetail(sid){
   var logHtml=s.log.map(function(l){return '<div class="log-item"><span class="log-ts click" onclick="playClipFromRow('+l.secs+',this)">⏱'+l.ts+'</span><span class="log-period">'+l.period+'T</span><span class="log-icon">'+(l.result==='yes'?'✅':'❌')+'</span><span class="log-act">'+l.action+'</span><span class="clip-timing"><input type="number" value="'+clipBeforeSecs+'" min="1" max="60" class="cb-in">s<span style="color:var(--border);margin:0 2px">|</span><input type="number" value="'+clipAfterSecs+'" min="1" max="60" class="ca-in">s</span></div>';}).join('')||'<div class="empty">Vacío</div>';
   document.getElementById('mdTitle').textContent=s.playerName+' · '+s.rival;
   document.getElementById('mdContent').innerHTML='<div class="grid2" style="margin-bottom:10px"><div class="stat-box"><div class="val">'+s.minutes+"'</div><div class=\"lbl\">Minutos</div></div><div class=\"stat-box\"><div class=\"val\" style=\"color:"+(sc.globalPct!=null?col(sc.globalPct):'var(--muted)')+'">'+( sc.globalPct!=null?sc.globalPct+'%':'—')+'</div><div class="lbl">Acierto global</div></div></div><div style="font-size:12px;color:var(--muted);margin-bottom:10px">📅 '+new Date(s.date).toLocaleString('es-CO')+'</div>'+(s.obs?'<div style="background:#f9fafb;border-radius:7px;padding:9px;font-size:13px;margin-bottom:10px;border:1px solid var(--border)">'+s.obs+'</div>':'')+'<h3 style="margin-bottom:8px">Acierto por acción</h3>'+(breakdown||'<div class="empty">Sin datos</div>')+'<h3 style="margin:12px 0 7px">Log — toca ⏱ para clip</h3><div class="log-list" style="max-height:180px">'+logHtml+'</div>';
-  var sameSession=(mdVideoSessionId===sid)&&mdVideoSrc;
-  mdOffset=0;document.getElementById('mdOffset').value=0;
-  if(!sameSession){
-    mdVidDur=0;mdVideoSrc=null;mdVideoSessionId=null;
-    document.getElementById('mdVidPlaceholder').style.display='flex';document.getElementById('mdVidWrap').style.display='none';
-    document.getElementById('clipReplayBtn').style.display='none';document.getElementById('clipLabel').textContent='Toca un timestamp del log para ver el clip';
-    var vid=document.getElementById('mdVideo');vid.pause();vid.removeAttribute('src');vid.load();
-    document.getElementById('mdTlMarks').innerHTML='';document.getElementById('mdTlProg').style.width='0%';
-    document.getElementById('compileActionBtns').innerHTML='';document.getElementById('compileStatus').textContent='';document.getElementById('compilarBtn').style.display='none';
-  }else{renderDetailTimeline();}
-  mdVideoSessionId=sid;openModal('modalDetail');
+  mdOffset=currentSess.videoOffset||0;document.getElementById('mdOffset').value=mdOffset;
+  openModal('modalDetail');
+  loadSessionVideo();
+}
+function loadSessionVideo(){
+  clearInterval(mdProgressInterval);clearInterval(clipMonitorInterval);
+  document.getElementById('compileActionBtns').innerHTML='';document.getElementById('compileStatus').textContent='';document.getElementById('compilarBtn').style.display='none';
+  document.getElementById('clipReplayBtn').style.display='none';document.getElementById('clipLabel').textContent='Toca un timestamp del log para ver el clip';
+  document.getElementById('mdTlMarks').innerHTML='';document.getElementById('mdTlProg').style.width='0%';
+  var vid=document.getElementById('mdVideo');vid.pause();vid.removeAttribute('src');vid.load();vid.style.display='none';
+  if(ytPlayer&&ytPlayer.destroy){try{ytPlayer.destroy();}catch(e){}ytPlayer=null;}
+  document.getElementById('mdYtPlayer').innerHTML='';document.getElementById('mdYtPlayer').style.display='none';
+
+  if(currentSess.videoUrl){
+    mdMode='youtube';mdVidDur=0;
+    document.getElementById('mdVidPlaceholder').style.display='none';
+    document.getElementById('mdVidWrap').style.display='block';
+    document.getElementById('mdYtPlayer').style.display='block';
+    document.getElementById('mdCompileSection').style.display='none';
+    document.getElementById('mdYtNotice').style.display='block';
+    document.getElementById('mdVidModeLabel').textContent='🔗 YouTube — visible en todos los dispositivos';
+    initYoutubePlayer(extractYoutubeId(currentSess.videoUrl));
+  } else if(mdVideoSessionId===currentSess.id&&mdVideoSrc){
+    mdMode='local';
+    document.getElementById('mdVidPlaceholder').style.display='none';
+    document.getElementById('mdVidWrap').style.display='block';
+    vid.style.display='block';
+    document.getElementById('mdCompileSection').style.display='block';
+    document.getElementById('mdYtNotice').style.display='none';
+    document.getElementById('mdVidModeLabel').textContent='💻 Video local — solo este dispositivo';
+    vid.src=mdVideoSrc;
+    vid.addEventListener('loadedmetadata',function(){mdVidDur=vid.duration;renderDetailTimeline();buildCompileButtons();startProgressPoll();},{once:true});
+  } else {
+    mdMode=null;mdVidDur=0;
+    document.getElementById('mdVidPlaceholder').style.display='flex';
+    document.getElementById('mdVidWrap').style.display='none';
+    document.getElementById('mdYtInput').value='';
+  }
+}
+function extractYoutubeId(url){
+  var m=(url||'').match(/(?:youtube\.com\/(?:watch\?v=|embed\/|live\/|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{6,})/);
+  return m?m[1]:null;
+}
+function attachYoutubeLink(){
+  if(!requireAdmin()){document.getElementById('mdYtInput').value='';return;}
+  var url=document.getElementById('mdYtInput').value.trim();if(!url)return;
+  var vidId=extractYoutubeId(url);
+  if(!vidId){toast('Link de YouTube no válido','#e84040');return;}
+  currentSess.videoUrl=url;
+  save();
+  toast('✅ Video de YouTube vinculado — visible para todos','#007818');
+  loadSessionVideo();
+}
+function resetSessionVideo(){
+  if(mdMode==='youtube'){
+    if(!requireAdmin())return;
+    currentSess.videoUrl=null;save();
+  } else if(mdMode==='local'){
+    if(mdVideoSrc)URL.revokeObjectURL(mdVideoSrc);
+    mdVideoSrc=null;mdVideoSessionId=null;
+  }
+  loadSessionVideo();
+}
+function onYouTubeIframeAPIReady(){ytApiReady=true;if(ytPendingVideoId){var id=ytPendingVideoId;ytPendingVideoId=null;initYoutubePlayer(id);}}
+function initYoutubePlayer(videoId){
+  if(!videoId)return;
+  if(!ytApiReady||typeof YT==='undefined'||!YT.Player){ytPendingVideoId=videoId;return;}
+  var container=document.getElementById('mdYtPlayer');container.innerHTML='<div id="ytPlayerEl"></div>';
+  ytPlayer=new YT.Player('ytPlayerEl',{
+    videoId:videoId,
+    playerVars:{playsinline:1,rel:0},
+    events:{onReady:function(){mdVidDur=ytPlayer.getDuration()||0;renderDetailTimeline();startProgressPoll();}}
+  });
 }
 function loadDetailVideo(input){
   var file=input.files[0];if(!file)return;
+  if(currentSess&&currentSess.videoUrl){toast('Esta sesión ya tiene un link de YouTube. Usa "Cambiar video" para quitarlo primero.','#f5a623');input.value='';return;}
   if(mdVideoSrc)URL.revokeObjectURL(mdVideoSrc);
   mdVideoSrc=URL.createObjectURL(file);
-  var vid=document.getElementById('mdVideo');vid.src=mdVideoSrc;
-  document.getElementById('mdVidPlaceholder').style.display='none';document.getElementById('mdVidWrap').style.display='block';
-  vid.addEventListener('loadedmetadata',function(){mdVidDur=vid.duration;renderDetailTimeline();buildCompileButtons();});
-  vid.addEventListener('timeupdate',function(){if(mdVidDur>0)document.getElementById('mdTlProg').style.width=(vid.currentTime/mdVidDur*100)+'%';});
+  mdVideoSessionId=currentSess?currentSess.id:null;
   input.value='';
+  loadSessionVideo();
 }
-function updateMdOffset(){mdOffset=parseFloat(document.getElementById('mdOffset').value)||0;renderDetailTimeline();}
+function updateMdOffset(){
+  mdOffset=parseFloat(document.getElementById('mdOffset').value)||0;
+  renderDetailTimeline();
+  if(currentSess&&isAdmin){currentSess.videoOffset=mdOffset;save();}
+}
 function renderDetailTimeline(){
   var wrap=document.getElementById('mdTlMarks');wrap.innerHTML='';if(!mdVidDur||!currentSess)return;
   currentSess.log.forEach(function(l){var adj=l.secs+mdOffset,pct=Math.min(100,Math.max(0,(adj/mdVidDur)*100));var dot=document.createElement('div');Object.assign(dot.style,{position:'absolute',left:pct+'%',top:'3px',bottom:'3px',width:'4px',borderRadius:'2px',background:l.result==='yes'?'#007818':'#e84040',cursor:'pointer',transform:'translateX(-50%)'});dot.onclick=function(){playClip(l.secs,clipBeforeSecs,clipAfterSecs);};wrap.appendChild(dot);});
 }
-document.getElementById('mdTlWrap').addEventListener('click',function(e){var rect=e.currentTarget.getBoundingClientRect(),vid=document.getElementById('mdVideo');if(vid.src&&mdVidDur)vid.currentTime=((e.clientX-rect.left)/rect.width)*mdVidDur;});
+function pbCurrentTime(){
+  if(mdMode==='local')return document.getElementById('mdVideo').currentTime;
+  if(mdMode==='youtube'&&ytPlayer&&ytPlayer.getCurrentTime)return ytPlayer.getCurrentTime();
+  return 0;
+}
+function pbSeek(t){
+  if(mdMode==='local')document.getElementById('mdVideo').currentTime=t;
+  else if(mdMode==='youtube'&&ytPlayer&&ytPlayer.seekTo)ytPlayer.seekTo(t,true);
+}
+function pbPlay(){
+  if(mdMode==='local')document.getElementById('mdVideo').play();
+  else if(mdMode==='youtube'&&ytPlayer&&ytPlayer.playVideo)ytPlayer.playVideo();
+}
+function pbPause(){
+  if(mdMode==='local')document.getElementById('mdVideo').pause();
+  else if(mdMode==='youtube'&&ytPlayer&&ytPlayer.pauseVideo)ytPlayer.pauseVideo();
+}
+function startProgressPoll(){
+  clearInterval(mdProgressInterval);
+  mdProgressInterval=setInterval(function(){
+    if(!document.getElementById('modalDetail').classList.contains('open')){clearInterval(mdProgressInterval);return;}
+    if(!mdMode||!mdVidDur)return;
+    var t=pbCurrentTime();
+    document.getElementById('mdTlProg').style.width=Math.min(100,Math.max(0,(t/mdVidDur*100)))+'%';
+  },300);
+}
+document.getElementById('mdTlWrap').addEventListener('click',function(e){
+  if(!mdMode||!mdVidDur)return;
+  var rect=e.currentTarget.getBoundingClientRect();
+  pbSeek(((e.clientX-rect.left)/rect.width)*mdVidDur);
+});
 function playClip(secs,before,after){
+  if(!mdMode){toast('Primero adjunta un video o pega un link de YouTube','#e84040');return;}
   clipStartSecs=secs;clipLastBefore=before;clipLastAfter=after;
-  var vid=document.getElementById('mdVideo');if(!vid.src){toast('Primero adjunta el video','#e84040');return;}
   var start=Math.max(0,secs+mdOffset-before),end=secs+mdOffset+after;
   document.getElementById('clipLabel').textContent='Clip: '+fmt(secs)+' ('+before+'s antes · '+after+'s después)';
   document.getElementById('clipReplayBtn').style.display='inline-flex';
-  vid.currentTime=start;vid.play();
-  var stopAt=function(){if(vid.currentTime>=end){vid.pause();vid.removeEventListener('timeupdate',stopAt);}};
-  vid.addEventListener('timeupdate',stopAt);
+  pbSeek(start);pbPlay();
+  clearInterval(clipMonitorInterval);
+  clipMonitorInterval=setInterval(function(){if(pbCurrentTime()>=end){pbPause();clearInterval(clipMonitorInterval);}},200);
 }
 function playClipFromRow(secs,el){var row=el.closest('.log-item');var before=parseInt(row.querySelector('.cb-in').value)||clipBeforeSecs;var after=parseInt(row.querySelector('.ca-in').value)||clipAfterSecs;playClip(secs,before,after);}
 function replayClip(){if(clipStartSecs!==null)playClip(clipStartSecs,clipLastBefore,clipLastAfter);}
 function updateClipRange(){clipBeforeSecs=parseInt(document.getElementById('clipBefore').value)||5;clipAfterSecs=parseInt(document.getElementById('clipAfter').value)||5;document.getElementById('clipBeforeVal').textContent=clipBeforeSecs+'s';document.getElementById('clipAfterVal').textContent=clipAfterSecs+'s';}
 
-/* COMPILADO */
+/* COMPILADO (solo disponible con video local, por restricciones de CORS de YouTube) */
 function buildCompileButtons(){
   if(!currentSess)return;
   var actions={};currentSess.log.forEach(function(l){actions[l.action]=(actions[l.action]||0)+1;});
@@ -860,6 +973,7 @@ function buildCompileButtons(){
   });
 }
 function startCompile(){
+  if(mdMode!=='local'){toast('La descarga de clips solo funciona con video adjuntado localmente','#e84040');return;}
   var action=document.getElementById('compilarBtn').dataset.action;if(!action||!currentSess)return;
   var vid=document.getElementById('mdVideo');if(!vid.src){toast('Primero adjunta el video','#e84040');return;}
   var clips=currentSess.log.filter(function(l){return l.action===action;}).slice().reverse();if(!clips.length)return;
