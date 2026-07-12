@@ -449,6 +449,7 @@ function initFirebase(){
       console.error('Firestore error',err);
       setSyncStatus('⚠️ Sin conexión — datos locales','var(--warn)');
     });
+    listenLiveSession();
   }catch(e){console.error('Firebase init error',e);setSyncStatus('⚠️ Error de conexión','var(--danger)');}
 }
 function refreshCurrentView(){
@@ -460,6 +461,41 @@ function refreshCurrentView(){
   if(pg==='dashboard')populateDashSelect();
 }
 
+/* LIVE SESSION BROADCAST (para que quienes están en solo-lectura vean el tagging en vivo) */
+function broadcastLive(data){
+  if(!isAdmin||!fsReady||!db)return;
+  db.collection('efc_data').doc('live_session').set(Object.assign({updatedAt:firebase.firestore.FieldValue.serverTimestamp()},data),{merge:true}).catch(function(e){console.error('live broadcast error',e);});
+}
+function listenLiveSession(){
+  if(!db)return;
+  db.collection('efc_data').doc('live_session').onSnapshot(function(doc){
+    if(isAdmin)return; // el admin maneja su propio estado local
+    applyRemoteLiveState(doc.exists?doc.data():null);
+  },function(err){console.error('live listen error',err);});
+}
+function applyRemoteLiveState(data){
+  if(isAdmin)return;
+  var sel=document.getElementById('livePlayer'),main=document.getElementById('liveMain');
+  if(!data||!data.active){
+    main.style.display='none';sel.value='';
+    return;
+  }
+  sel.value=data.playerId||'';
+  main.style.display='block';
+  liveLog=data.log||[];
+  var tags=data.tags||((players.find(function(x){return x.id===data.playerId;})||{}).tags)||[];
+  renderTagGrid(tags);
+  renderLiveLog();updateLiveSummary();renderLiveCharts();
+  var p=data.period||0,s1=data.secs1||0,s2=data.secs2||0;
+  document.getElementById('timer1').textContent=fmt(s1);
+  document.getElementById('timer2').textContent=fmt(s2);
+  document.getElementById('timer1').style.color=p===1?'var(--orange)':'var(--muted)';
+  document.getElementById('timer2').style.color=p===2?'var(--orange)':'var(--muted)';
+  document.getElementById('btn1T').classList.toggle('running',p===1);
+  document.getElementById('btn2T').classList.toggle('running',p===2);
+  document.getElementById('liveDot').style.display=(p===1||p===2)?'inline':'none';
+}
+
 /* ADMIN MODE — cambia esta clave por la tuya */
 var ADMIN_PASSWORD='efc2026';
 var isAdmin=localStorage.getItem('efc_admin')==='1';
@@ -467,9 +503,15 @@ function updateAdminBadge(){
   var b=document.getElementById('adminBadge');if(!b)return;
   if(isAdmin){b.textContent='✏️ Modo Admin';b.style.background='rgba(0,120,24,.1)';b.style.color='var(--green)';b.style.borderColor='var(--green)';}
   else{b.textContent='👁 Solo lectura';b.style.background='rgba(107,122,138,.1)';b.style.color='var(--muted)';b.style.borderColor='var(--border)';}
+  ['livePlayer','btn1T','btn2T'].forEach(function(id){var el=document.getElementById(id);if(el)el.disabled=!isAdmin;});
+  document.querySelectorAll('#pg-live .btn-ghost.btn-sm, #pg-live .btn-warn.btn-sm').forEach(function(el){el.disabled=!isAdmin;el.style.opacity=isAdmin?'1':'.5';});
 }
 function toggleAdmin(){
-  if(isAdmin){isAdmin=false;localStorage.removeItem('efc_admin');updateAdminBadge();toast('Modo lectura activado');return;}
+  if(isAdmin){
+    isAdmin=false;localStorage.removeItem('efc_admin');updateAdminBadge();toast('Modo lectura activado');
+    if(db)db.collection('efc_data').doc('live_session').get().then(function(doc){applyRemoteLiveState(doc.exists?doc.data():null);}).catch(function(){});
+    return;
+  }
   var p=prompt('Clave de administrador:');
   if(p===null)return;
   if(p===ADMIN_PASSWORD){isAdmin=true;localStorage.setItem('efc_admin','1');updateAdminBadge();toast('✅ Modo admin activado','#007818');}
@@ -539,13 +581,15 @@ function showConfirm(title,msg,onOk){
 
 /* TIMERS */
 function startPeriod(p){
+  if(!requireAdmin())return;
   clearInterval(int1);clearInterval(int2);
   document.getElementById('liveDot').style.display='inline';
   if(p===1){int1=setInterval(function(){secs1++;document.getElementById('timer1').textContent=fmt(secs1);},1000);period=1;document.getElementById('btn1T').classList.add('running');document.getElementById('btn2T').classList.remove('running');document.getElementById('timer1').style.color='var(--orange)';document.getElementById('timer2').style.color='var(--muted)';}
   else{int2=setInterval(function(){secs2++;document.getElementById('timer2').textContent=fmt(secs2);},1000);period=2;document.getElementById('btn2T').classList.add('running');document.getElementById('btn1T').classList.remove('running');document.getElementById('timer2').style.color='var(--orange)';document.getElementById('timer1').style.color='var(--muted)';}
+  broadcastLive({period:period,secs1:secs1,secs2:secs2});
 }
-function pausePeriod(){clearInterval(int1);clearInterval(int2);document.getElementById('liveDot').style.display='none';document.getElementById('btn1T').classList.remove('running');document.getElementById('btn2T').classList.remove('running');}
-function resetAll(){pausePeriod();secs1=0;secs2=0;period=0;document.getElementById('timer1').textContent='00:00';document.getElementById('timer2').textContent='00:00';document.getElementById('timer1').style.color='var(--orange)';document.getElementById('timer2').style.color='var(--muted)';}
+function pausePeriod(){if(!requireAdmin())return;clearInterval(int1);clearInterval(int2);document.getElementById('liveDot').style.display='none';document.getElementById('btn1T').classList.remove('running');document.getElementById('btn2T').classList.remove('running');broadcastLive({period:period,secs1:secs1,secs2:secs2});}
+function resetAll(){if(!requireAdmin())return;pausePeriod();secs1=0;secs2=0;period=0;document.getElementById('timer1').textContent='00:00';document.getElementById('timer2').textContent='00:00';document.getElementById('timer1').style.color='var(--orange)';document.getElementById('timer2').style.color='var(--muted)';broadcastLive({period:period,secs1:secs1,secs2:secs2});}
 function getCurrentTime(){if(period===1)return{secs:secs1,period:1,ts:fmt(secs1)};if(period===2)return{secs:secs2,period:2,ts:fmt(secs2)};return{secs:secs1,period:1,ts:fmt(secs1)};}
 
 /* JUGADORES */
@@ -599,12 +643,15 @@ function deletePlayer(id){
 /* LIVE */
 function populateLiveSelect(){document.getElementById('livePlayer').innerHTML='<option value="">— Seleccionar —</option>'+players.map(function(p){return '<option value="'+p.id+'">'+p.name+'</option>';}).join('');}
 function loadLivePlayer(){
+  if(!isAdmin)return;
   var id=document.getElementById('livePlayer').value;
   document.getElementById('liveMain').style.display=id?'block':'none';
-  if(!id)return;
+  if(!id){broadcastLive({active:false});return;}
   liveLog=[];Object.values(liveCharts).forEach(function(c){try{c.destroy();}catch(e){}});liveCharts={};
   document.getElementById('liveChartsPanel').innerHTML='<div class="empty" style="padding:12px">Empieza a taggear para ver las gráficas</div>';
-  renderLiveLog();renderTagGrid(players.find(function(x){return x.id===id;}).tags);
+  var lp=players.find(function(x){return x.id===id;});
+  renderLiveLog();renderTagGrid(lp.tags);
+  broadcastLive({active:true,playerId:id,playerName:lp.name,tags:lp.tags,log:[],period:period,secs1:secs1,secs2:secs2});
 }
 function renderTagGrid(tags){
   var g=document.getElementById('liveTagGrid');
@@ -626,6 +673,7 @@ function tagAction(action,result,btn){
   var cnt=liveLog.filter(function(l){return l.action===action;}).length;
   var el=document.getElementById('c_'+k);if(el)el.textContent=cnt+' registro'+(cnt!==1?'s':'');
   renderLiveLog();updateLiveSummary();renderLiveCharts();
+  broadcastLive({log:liveLog,period:period,secs1:secs1,secs2:secs2});
 }
 function updateLiveSummary(){
   var sc=computeScores(liveLog,[]),el=document.getElementById('liveSummary');
@@ -646,6 +694,7 @@ function delLog(id){
   Object.values(liveCharts).forEach(function(c){try{c.destroy();}catch(e){}});liveCharts={};
   document.getElementById('liveChartsPanel').innerHTML='<div class="empty" style="padding:12px">Empieza a taggear para ver las gráficas</div>';
   renderLiveLog();updateLiveSummary();renderLiveCharts();
+  broadcastLive({log:liveLog});
 }
 
 /* LIVE CHARTS */
@@ -706,6 +755,7 @@ function saveSession(){
   document.getElementById('liveChartsPanel').innerHTML='<div class="empty" style="padding:12px">Empieza a taggear para ver las gráficas</div>';
   renderLiveLog();updateLiveSummary();resetAll();
   document.getElementById('livePlayer').value='';document.getElementById('liveMain').style.display='none';
+  broadcastLive({active:false});
   toast('✅ Sesión guardada','#007818');
 }
 
