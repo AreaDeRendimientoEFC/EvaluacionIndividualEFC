@@ -48,6 +48,13 @@ label{font-size:12px;color:var(--muted);display:block;margin-bottom:3px;}
 .tb-y:active{background:var(--green);color:#fff;}
 .tb-n{flex:1;background:rgba(232,64,64,.07);border:1.5px solid var(--danger);color:var(--danger);border-radius:7px;padding:9px;font-size:13px;font-weight:600;cursor:pointer;transition:all .15s;text-align:center;}
 .tb-n:active{background:var(--danger);color:#fff;}
+.tag-row{display:flex;align-items:center;gap:6px;background:#f9fafb;border:1px solid var(--border);border-radius:7px;padding:5px 8px;margin-bottom:5px;}
+.tag-row-label{flex:1;font-size:11.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:help;}
+.tb-y-sm{background:rgba(0,120,24,.08);border:1.5px solid var(--green);color:var(--green);border-radius:6px;padding:4px 8px;font-size:12px;font-weight:700;cursor:pointer;transition:all .15s;line-height:1;}
+.tb-y-sm:active{background:var(--green);color:#fff;}
+.tb-n-sm{background:rgba(232,64,64,.07);border:1.5px solid var(--danger);color:var(--danger);border-radius:6px;padding:4px 8px;font-size:12px;font-weight:700;cursor:pointer;transition:all .15s;line-height:1;}
+.tb-n-sm:active{background:var(--danger);color:#fff;}
+.tag-row-count{font-size:10px;color:var(--muted);min-width:38px;text-align:right;}
 .tag-desc-row{display:flex;gap:8px;margin-top:6px;}
 .tag-desc-yes{flex:1;font-size:11px;color:var(--green);background:rgba(0,120,24,.06);border-radius:5px;padding:4px 7px;line-height:1.4;}
 .tag-desc-no{flex:1;font-size:11px;color:#c02020;background:rgba(232,64,64,.06);border-radius:5px;padding:4px 7px;line-height:1.4;}
@@ -149,7 +156,7 @@ tr:hover td{background:#fafafa;}
 <div class="page" id="pg-live">
   <div class="card card-ol">
     <div class="grid2" style="align-items:start;gap:16px">
-      <div><h3>Jugador</h3><select id="livePlayer" onchange="loadLivePlayer()"><option value="">— Seleccionar —</option></select></div>
+      <div><h3>Agregar jugador a la sesión</h3><select id="liveAddPlayer" onchange="addLivePlayer()"><option value="">— Seleccionar —</option></select></div>
       <div>
         <h3>Tiempos del Partido</h3>
         <div style="display:flex;gap:8px;margin-bottom:10px">
@@ -169,32 +176,8 @@ tr:hover td{background:#fafafa;}
       </div>
     </div>
   </div>
-  <div id="liveMain" style="display:none">
-    <div class="live-layout">
-      <div>
-        <div class="card card-ol">
-          <div class="sh"><h2 style="margin:0">Acciones del Jugador</h2><span style="font-size:11px;color:var(--muted)">✅ Ejecutó &nbsp;|&nbsp; ❌ No ejecutó</span></div>
-          <div id="liveTagGrid"></div>
-        </div>
-      </div>
-      <div>
-        <div class="card">
-          <div class="sh">
-            <div><h2 style="margin:0">Registro</h2><span id="liveSummary" style="font-size:12px;color:var(--muted)"></span></div>
-            <button class="btn btn-warn btn-sm" onclick="openCloseSession()">Cerrar Sesión</button>
-          </div>
-          <div class="log-list" id="liveLog"></div>
-          <div class="empty" id="liveLogEmpty">Sin acciones aún</div>
-        </div>
-      </div>
-      <div>
-        <div class="card">
-          <h2 style="margin-bottom:12px">📈 Progreso en Vivo</h2>
-          <div id="liveChartsPanel"><div class="empty" style="padding:12px">Empieza a taggear para ver las gráficas</div></div>
-        </div>
-      </div>
-    </div>
-  </div>
+  <div class="empty" id="liveRosterEmpty" style="margin-top:12px">Agrega uno o más jugadores para empezar a taggear</div>
+  <div id="liveRosterGrid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px;margin-top:12px"></div>
 </div>
 
 <!-- HISTORIAL -->
@@ -407,7 +390,7 @@ tr:hover td{background:#fafafa;}
 <script>
 var players=JSON.parse(localStorage.getItem('efc_players')||'[]');
 var sessions=JSON.parse(localStorage.getItem('efc_sessions')||'[]');
-var editingId=null,tempTags=[],liveLog=[],liveCharts={};
+var editingId=null,tempTags=[],liveRoster={},closingPlayerId=null;
 var period=0,secs1=0,secs2=0,int1=null,int2=null;
 var mdOffset=0,mdVidDur=0,currentSess=null,mdVideoSrc=null,mdVideoSessionId=null;
 var clipStartSecs=null,clipBeforeSecs=5,clipAfterSecs=5,clipLastBefore=5,clipLastAfter=5;
@@ -462,6 +445,18 @@ function refreshCurrentView(){
 }
 
 /* LIVE SESSION BROADCAST (para que quienes están en solo-lectura vean el tagging en vivo) */
+function rosterForBroadcast(){
+  var out={};
+  Object.keys(liveRoster).forEach(function(pid){
+    var e=liveRoster[pid];
+    out[pid]={playerName:e.name,tags:e.tags,log:e.log};
+  });
+  return out;
+}
+function broadcastRoster(){
+  if(!isAdmin||!fsReady||!db)return;
+  db.collection('efc_data').doc('live_session').set({active:Object.keys(liveRoster).length>0,players:rosterForBroadcast(),period:period,secs1:secs1,secs2:secs2,updatedAt:firebase.firestore.FieldValue.serverTimestamp()}).catch(function(e){console.error('live broadcast error',e);});
+}
 function broadcastLive(data){
   if(!isAdmin||!fsReady||!db)return;
   db.collection('efc_data').doc('live_session').set(Object.assign({updatedAt:firebase.firestore.FieldValue.serverTimestamp()},data),{merge:true}).catch(function(e){console.error('live broadcast error',e);});
@@ -475,18 +470,19 @@ function listenLiveSession(){
 }
 function applyRemoteLiveState(data){
   if(isAdmin)return;
-  var sel=document.getElementById('livePlayer'),main=document.getElementById('liveMain');
-  if(!data||!data.active){
-    main.style.display='none';sel.value='';
-    return;
-  }
-  sel.value=data.playerId||'';
-  main.style.display='block';
-  liveLog=data.log||[];
-  var tags=data.tags||((players.find(function(x){return x.id===data.playerId;})||{}).tags)||[];
-  renderTagGrid(tags);
-  renderLiveLog();updateLiveSummary();renderLiveCharts();
-  var p=data.period||0,s1=data.secs1||0,s2=data.secs2||0;
+  var grid=document.getElementById('liveRosterGrid'),empty=document.getElementById('liveRosterEmpty');
+  Object.keys(liveChartInstances).forEach(destroyLiveChart);
+  var remotePlayers=(data&&data.active&&data.players)?data.players:{};
+  liveRoster={};
+  Object.keys(remotePlayers).forEach(function(pid){
+    var rp=remotePlayers[pid];
+    liveRoster[pid]={name:rp.playerName,tags:rp.tags||[],log:rp.log||[]};
+  });
+  var pids=Object.keys(liveRoster);
+  empty.style.display=pids.length?'none':'block';
+  grid.innerHTML=pids.map(function(pid){return playerCardHTML(pid);}).join('');
+  pids.forEach(function(pid){renderTagGrid(pid);renderLiveLog(pid);updateLiveSummary(pid);updateLiveChart(pid);});
+  var p=(data&&data.period)||0,s1=(data&&data.secs1)||0,s2=(data&&data.secs2)||0;
   document.getElementById('timer1').textContent=fmt(s1);
   document.getElementById('timer2').textContent=fmt(s2);
   document.getElementById('timer1').style.color=p===1?'var(--orange)':'var(--muted)';
@@ -503,7 +499,7 @@ function updateAdminBadge(){
   var b=document.getElementById('adminBadge');if(!b)return;
   if(isAdmin){b.textContent='✏️ Modo Admin';b.style.background='rgba(0,120,24,.1)';b.style.color='var(--green)';b.style.borderColor='var(--green)';}
   else{b.textContent='👁 Solo lectura';b.style.background='rgba(107,122,138,.1)';b.style.color='var(--muted)';b.style.borderColor='var(--border)';}
-  ['livePlayer','btn1T','btn2T'].forEach(function(id){var el=document.getElementById(id);if(el)el.disabled=!isAdmin;});
+  ['liveAddPlayer','btn1T','btn2T'].forEach(function(id){var el=document.getElementById(id);if(el)el.disabled=!isAdmin;});
   document.querySelectorAll('#pg-live .btn-ghost.btn-sm, #pg-live .btn-warn.btn-sm').forEach(function(el){el.disabled=!isAdmin;el.style.opacity=isAdmin?'1':'.5';});
 }
 function toggleAdmin(){
@@ -641,103 +637,130 @@ function deletePlayer(id){
 }
 
 /* LIVE */
-function populateLiveSelect(){document.getElementById('livePlayer').innerHTML='<option value="">— Seleccionar —</option>'+players.map(function(p){return '<option value="'+p.id+'">'+p.name+'</option>';}).join('');}
-function loadLivePlayer(){
-  if(!isAdmin)return;
-  var id=document.getElementById('livePlayer').value;
-  document.getElementById('liveMain').style.display=id?'block':'none';
-  if(!id){broadcastLive({active:false});return;}
-  liveLog=[];Object.values(liveCharts).forEach(function(c){try{c.destroy();}catch(e){}});liveCharts={};
-  document.getElementById('liveChartsPanel').innerHTML='<div class="empty" style="padding:12px">Empieza a taggear para ver las gráficas</div>';
-  var lp=players.find(function(x){return x.id===id;});
-  renderLiveLog();renderTagGrid(lp.tags);
-  broadcastLive({active:true,playerId:id,playerName:lp.name,tags:lp.tags,log:[],period:period,secs1:secs1,secs2:secs2});
+function populateLiveSelect(){
+  var sel=document.getElementById('liveAddPlayer');
+  sel.innerHTML='<option value="">— Seleccionar —</option>'+players.filter(function(p){return !liveRoster[p.id];}).map(function(p){return '<option value="'+p.id+'">'+p.name+'</option>';}).join('');
 }
-function renderTagGrid(tags){
-  var g=document.getElementById('liveTagGrid');
+function addLivePlayer(){
+  if(!requireAdmin()){document.getElementById('liveAddPlayer').value='';return;}
+  var sel=document.getElementById('liveAddPlayer');
+  var id=sel.value;if(!id)return;
+  sel.value='';
+  var p=players.find(function(x){return x.id===id;});if(!p||liveRoster[id])return;
+  liveRoster[id]={name:p.name,tags:p.tags,log:[]};
+  document.getElementById('liveRosterEmpty').style.display='none';
+  document.getElementById('liveRosterGrid').insertAdjacentHTML('beforeend',playerCardHTML(id));
+  renderTagGrid(id);renderLiveLog(id);updateLiveSummary(id);updateLiveChart(id);
+  populateLiveSelect();
+  broadcastRoster();
+}
+function playerCardHTML(pid){
+  return '<div class="card card-ol" id="pcard_'+pid+'" style="display:flex;flex-direction:column;gap:6px;padding:12px">'+
+    '<div class="sh" style="margin-bottom:2px"><h2 style="margin:0;font-size:13px">'+esc((liveRoster[pid]||{}).name||'')+'</h2>'+
+      '<div style="display:flex;gap:6px;align-items:center">'+
+        '<span style="font-size:11px;color:var(--muted)" id="liveSum_'+pid+'"></span>'+
+        '<button class="btn btn-warn btn-sm" style="padding:4px 9px;font-size:11px" onclick="openCloseSession(\''+pid+'\')">Cerrar</button>'+
+      '</div>'+
+    '</div>'+
+    '<div id="liveTagGrid_'+pid+'"></div>'+
+    '<div style="height:140px;margin:2px 0"><canvas id="liveChart_'+pid+'"></canvas></div>'+
+    '<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-top:2px">Registro</div>'+
+    '<div class="log-list" id="liveLog_'+pid+'" style="max-height:150px"></div>'+
+    '<div class="empty" id="liveLogEmpty_'+pid+'" style="display:none">Sin acciones aún</div>'+
+  '</div>';
+}
+function removeLiveCard(pid){destroyLiveChart(pid);var el=document.getElementById('pcard_'+pid);if(el)el.remove();delete liveRoster[pid];var pids=Object.keys(liveRoster);document.getElementById('liveRosterEmpty').style.display=pids.length?'none':'block';}
+function renderTagGrid(pid){
+  var e=liveRoster[pid];if(!e)return;
+  var g=document.getElementById('liveTagGrid_'+pid);if(!g)return;
+  var tags=e.tags;
   if(!tags.length){g.innerHTML='<div class="empty">Sin acciones. Edita el jugador.</div>';return;}
   g.innerHTML=tags.map(function(t){
     var lbl=tagLabel(t),dy=tagDescYes(t),dn=tagDescNo(t);
     var k=lbl.replace(/[^a-z0-9]/gi,'_');
     var safe=lbl.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
-    var descRow=(dy||dn)?'<div class="tag-desc-row">'+(dy?'<div class="tag-desc-yes">'+esc(dy)+'</div>':'<div style="flex:1"></div>')+(dn?'<div class="tag-desc-no">'+esc(dn)+'</div>':'<div style="flex:1"></div>')+'</div>':'';
-    return '<div class="tag-pair"><div class="tag-pair-label">⚡ '+lbl+'</div><div class="tag-btns"><button class="tb-y" onclick="tagAction(\''+safe+'\',\'yes\',this)">✅ Ejecutó</button><button class="tb-n" onclick="tagAction(\''+safe+'\',\'no\',this)">❌ No ejecutó</button></div>'+descRow+'<div class="pc" id="c_'+k+'">0 registros</div></div>';
+    var tip=esc((dy?'✅ '+dy:'')+(dy&&dn?' · ':'')+(dn?'❌ '+dn:''));
+    return '<div class="tag-row"><span class="tag-row-label" title="'+tip+'">⚡ '+lbl+'</span>'+
+      '<button class="tb-y-sm" onclick="tagAction(\''+pid+'\',\''+safe+'\',\'yes\',this)">✅</button>'+
+      '<button class="tb-n-sm" onclick="tagAction(\''+pid+'\',\''+safe+'\',\'no\',this)">❌</button>'+
+      '<span class="tag-row-count" id="c_'+pid+'_'+k+'">0/0</span></div>';
   }).join('');
 }
-function tagAction(action,result,btn){
+var liveChartInstances={};
+function updateLiveChart(pid){
+  var e=liveRoster[pid];if(!e)return;
+  var canvas=document.getElementById('liveChart_'+pid);if(!canvas)return;
+  var labels=e.tags.map(tagLabel);
+  var yes=[],no=[];
+  labels.forEach(function(lbl){
+    var y=0,n=0;
+    e.log.forEach(function(l){if(l.action===lbl){if(l.result==='yes')y++;else n++;}});
+    yes.push(y);no.push(n);
+  });
+  if(liveChartInstances[pid]){
+    var ch=liveChartInstances[pid];
+    ch.data.labels=labels;ch.data.datasets[0].data=yes;ch.data.datasets[1].data=no;ch.update('none');
+  } else {
+    liveChartInstances[pid]=new Chart(canvas,{
+      type:'bar',
+      data:{labels:labels,datasets:[
+        {label:'Ejecutó',data:yes,backgroundColor:'#007818',borderRadius:3,categoryPercentage:0.6,barPercentage:0.9,maxBarThickness:14},
+        {label:'No ejecutó',data:no,backgroundColor:'#e84040',borderRadius:3,categoryPercentage:0.6,barPercentage:0.9,maxBarThickness:14}
+      ]},
+      options:{
+        indexAxis:'y',responsive:true,maintainAspectRatio:false,animation:{duration:200},
+        scales:{
+          x:{beginAtZero:true,ticks:{stepSize:1,precision:0,color:'#6b7a8a',font:{size:9}},grid:{color:'rgba(0,0,0,.06)'}},
+          y:{ticks:{color:'#1a1f26',font:{size:9}},grid:{display:false}}
+        },
+        plugins:{legend:{display:false},tooltip:{callbacks:{label:function(ctx){return ctx.dataset.label+': '+ctx.raw;}}}}
+      }
+    });
+  }
+}
+function destroyLiveChart(pid){if(liveChartInstances[pid]){try{liveChartInstances[pid].destroy();}catch(e){}delete liveChartInstances[pid];}}
+function tagAction(pid,action,result,btn){
   if(!requireAdmin())return;
+  var e=liveRoster[pid];if(!e)return;
   var cur=getCurrentTime();
-  liveLog.unshift({id:uid(),action:action,result:result,ts:cur.ts,secs:cur.secs,period:cur.period});
+  e.log.unshift({id:uid(),action:action,result:result,ts:cur.ts,secs:cur.secs,period:cur.period});
   btn.style.opacity='.45';setTimeout(function(){btn.style.opacity='1';},180);
   var k=action.replace(/[^a-z0-9]/gi,'_');
-  var cnt=liveLog.filter(function(l){return l.action===action;}).length;
-  var el=document.getElementById('c_'+k);if(el)el.textContent=cnt+' registro'+(cnt!==1?'s':'');
-  renderLiveLog();updateLiveSummary();renderLiveCharts();
-  broadcastLive({log:liveLog,period:period,secs1:secs1,secs2:secs2});
+  var y=e.log.filter(function(l){return l.action===action&&l.result==='yes';}).length;
+  var n=e.log.filter(function(l){return l.action===action&&l.result==='no';}).length;
+  var el=document.getElementById('c_'+pid+'_'+k);if(el)el.textContent=y+'✅ '+n+'❌';
+  renderLiveLog(pid);updateLiveSummary(pid);updateLiveChart(pid);
+  broadcastRoster();
 }
-function updateLiveSummary(){
-  var sc=computeScores(liveLog,[]),el=document.getElementById('liveSummary');
+function updateLiveSummary(pid){
+  var e=liveRoster[pid];if(!e)return;
+  var sc=computeScores(e.log,[]),el=document.getElementById('liveSum_'+pid);if(!el)return;
   if(sc.globalPct===null){el.textContent='';return;}
-  el.innerHTML='Acierto: <strong style="color:'+colPct(sc.globalPct)+'">'+sc.globalPct+'%</strong> ('+sc.totalYes+'✅ '+sc.totalNo+'❌)';
+  el.innerHTML='<strong style="color:'+colPct(sc.globalPct)+'">'+sc.globalPct+'%</strong>';
 }
-function renderLiveLog(){
-  var el=document.getElementById('liveLog'),em=document.getElementById('liveLogEmpty');
-  if(!liveLog.length){el.innerHTML='';em.style.display='block';return;}
+function renderLiveLog(pid){
+  var e=liveRoster[pid];if(!e)return;
+  var el=document.getElementById('liveLog_'+pid),em=document.getElementById('liveLogEmpty_'+pid);
+  if(!el)return;
+  if(!e.log.length){el.innerHTML='';em.style.display='block';return;}
   em.style.display='none';
-  el.innerHTML=liveLog.map(function(l){
-    return '<div class="log-item"><span class="log-ts">⏱'+l.ts+'</span><span class="log-period">'+l.period+'T</span><span class="log-icon">'+(l.result==='yes'?'✅':'❌')+'</span><span class="log-act">'+l.action+'</span><span class="log-del" onclick="delLog(\''+l.id+'\')">×</span></div>';
+  el.innerHTML=e.log.map(function(l){
+    return '<div class="log-item"><span class="log-ts">⏱'+l.ts+'</span><span class="log-period">'+l.period+'T</span><span class="log-icon">'+(l.result==='yes'?'✅':'❌')+'</span><span class="log-act">'+l.action+'</span><span class="log-del" onclick="delLog(\''+pid+'\',\''+l.id+'\')">×</span></div>';
   }).join('');
 }
-function delLog(id){
+function delLog(pid,id){
   if(!requireAdmin())return;
-  liveLog=liveLog.filter(function(x){return x.id!==id;});
-  Object.values(liveCharts).forEach(function(c){try{c.destroy();}catch(e){}});liveCharts={};
-  document.getElementById('liveChartsPanel').innerHTML='<div class="empty" style="padding:12px">Empieza a taggear para ver las gráficas</div>';
-  renderLiveLog();updateLiveSummary();renderLiveCharts();
-  broadcastLive({log:liveLog});
+  var e=liveRoster[pid];if(!e)return;
+  e.log=e.log.filter(function(x){return x.id!==id;});
+  renderLiveLog(pid);updateLiveSummary(pid);updateLiveChart(pid);
+  broadcastRoster();
 }
 
-/* LIVE CHARTS */
-function renderLiveCharts(){
-  var panel=document.getElementById('liveChartsPanel');
-  if(!liveLog.length){panel.innerHTML='<div class="empty" style="padding:12px">Empieza a taggear para ver las gráficas</div>';Object.values(liveCharts).forEach(function(c){try{c.destroy();}catch(e){}});liveCharts={};return;}
-  var actions={};
-  var chrono=[].concat(liveLog).reverse();
-  chrono.forEach(function(l){
-    if(!actions[l.action])actions[l.action]={yes:0,no:0,history:[],results:[]};
-    if(l.result==='yes')actions[l.action].yes++;else actions[l.action].no++;
-    var tot=actions[l.action].yes+actions[l.action].no;
-    actions[l.action].history.push(Math.round(actions[l.action].yes/tot*100));
-    actions[l.action].results.push(l.result);
-  });
-  Object.keys(liveCharts).forEach(function(lbl){if(!actions[lbl]){try{liveCharts[lbl].destroy();}catch(e){}delete liveCharts[lbl];var w=document.getElementById('wrap_lc_'+lbl.replace(/[^a-z0-9]/gi,'_'));if(w)w.remove();}});
-  if(panel.querySelector('.empty'))panel.innerHTML='';
-  Object.keys(actions).forEach(function(label){
-    var entry=actions[label],history=entry.history,results=entry.results,last=history[history.length-1];
-    var cid='lc_'+label.replace(/[^a-z0-9]/gi,'_'),wrapId='wrap_'+cid;
-    var ptColors=results.map(function(r){return r==='yes'?'#007818':'#e84040';});
-    if(liveCharts[label]){
-      var ch=liveCharts[label];ch.data.labels=history.map(function(_,i){return i+1;});ch.data.datasets[0].data=history;ch.data.datasets[0].pointBackgroundColor=ptColors;ch.update('none');
-      var pe=document.getElementById('pct_'+cid);if(pe){pe.textContent=last+'%';pe.style.color=last>=90?'#007818':last>=70?'#9a6500':'#c02020';}
-    } else if(!document.getElementById(wrapId)){
-      var div=document.createElement('div');div.id=wrapId;div.style.cssText='margin-bottom:16px;';
-      var hdr=document.createElement('div');hdr.style.cssText='display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;';
-      var lblEl=document.createElement('span');lblEl.style.cssText='font-size:11px;font-weight:700;color:var(--text);';lblEl.textContent='⚡ '+label;
-      var pctEl=document.createElement('span');pctEl.id='pct_'+cid;pctEl.style.cssText='font-size:13px;font-weight:800;color:'+(last>=90?'#007818':last>=70?'#9a6500':'#c02020')+';';pctEl.textContent=last+'%';
-      var leg=document.createElement('div');leg.style.cssText='display:flex;gap:8px;font-size:10px;color:var(--muted);align-items:center;margin-bottom:4px;';
-      leg.innerHTML='<span style="display:flex;align-items:center;gap:3px"><span style="width:8px;height:8px;border-radius:50%;background:#007818;display:inline-block"></span>Ejecutó</span><span style="display:flex;align-items:center;gap:3px"><span style="width:8px;height:8px;border-radius:50%;background:#e84040;display:inline-block"></span>No ejecutó</span>';
-      hdr.appendChild(lblEl);hdr.appendChild(pctEl);div.appendChild(hdr);div.appendChild(leg);
-      var cvs=document.createElement('canvas');cvs.id=cid;cvs.style.height='160px';div.appendChild(cvs);panel.appendChild(div);
-      liveCharts[label]=new Chart(cvs,{type:'line',data:{labels:history.map(function(_,i){return i+1;}),datasets:[{data:history,borderColor:'#1a1f26',backgroundColor:'rgba(26,31,38,.04)',borderWidth:2,tension:.3,fill:true,pointBackgroundColor:ptColors,pointBorderColor:'#fff',pointBorderWidth:1.5,pointRadius:5,pointHoverRadius:7}]},options:{responsive:true,animation:{duration:250},scales:{y:{min:0,max:100,ticks:{stepSize:25,values:[0,25,50,75,100],callback:function(v){return v+'%';},color:'#6b7a8a',font:{size:10}},grid:{color:'rgba(0,0,0,.06)'}},x:{ticks:{color:'#6b7a8a',font:{size:9}},grid:{display:false}}},plugins:{legend:{display:false},tooltip:{callbacks:{label:function(ctx){var r=results[ctx.dataIndex];return (r==='yes'?'✅ Ejecutó':'❌ No ejecutó')+' — '+ctx.raw+'%';}}}}}}); 
-    }
-  });
-}
-
-function openCloseSession(){
+function openCloseSession(pid){
   if(!requireAdmin())return;
-  var pid=document.getElementById('livePlayer').value;if(!pid)return;
-  var p=players.find(function(x){return x.id===pid;});
-  var labels=p.tags.map(tagLabel);var sc=computeScores(liveLog,labels);
+  var e=liveRoster[pid];if(!e)return;
+  closingPlayerId=pid;
+  var labels=e.tags.map(tagLabel);var sc=computeScores(e.log,labels);
   var col=function(pct){return pct>=90?'#007818':pct>=70?'#9a6500':'#c02020';};
   document.getElementById('scoreBreakdown').innerHTML=labels.map(function(t){var d=sc.byTag[t]||{yes:0,no:0};var tot=d.yes+d.no;var pct=tot>0?Math.round(d.yes/tot*100):null;var c=pct!==null?col(pct):'var(--muted)';return '<div style="margin-bottom:9px"><div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:2px"><span>'+t+'</span><span style="font-weight:700;color:'+c+'">'+(pct!==null?pct+'%':'—')+' <span style="font-size:11px;color:var(--muted)">('+d.yes+'✅ '+d.no+'❌)</span></span></div><div class="pbar"><div class="pbar-fill" style="width:'+(pct||0)+'%;background:'+(pct!==null?col(pct):'var(--border)')+'"></div></div></div>';}).join('')||'<div class="empty">Sin acciones</div>';
   document.getElementById('scoreGlobal').style.color=sc.globalPct!==null?col(sc.globalPct):'var(--muted)';
@@ -747,15 +770,16 @@ function openCloseSession(){
 }
 function saveSession(){
   if(!requireAdmin())return;
-  var pid=document.getElementById('livePlayer').value;if(!pid)return;
+  var pid=closingPlayerId;if(!pid)return;
+  var e=liveRoster[pid];if(!e)return;
   var p=players.find(function(x){return x.id===pid;});
-  var labels=p.tags.map(tagLabel);var sc=computeScores(liveLog,labels);
-  sessions.push({id:uid(),playerId:pid,playerName:p.name,date:new Date().toISOString(),rival:document.getElementById('msRival').value.trim()||'—',minutes:parseInt(document.getElementById('msMin').value)||0,obs:document.getElementById('msObs').value.trim(),log:[].concat(liveLog),scores:{byTag:sc.byTag,globalPct:sc.globalPct},tagSnapshot:p.tags.map(function(t){return typeof t==='string'?{label:t,descYes:'',descNo:''}:{label:t.label,descYes:t.descYes||'',descNo:t.descNo||''};})});
-  save();closeModal('modalSession');liveLog=[];Object.values(liveCharts).forEach(function(c){try{c.destroy();}catch(e){}});liveCharts={};
-  document.getElementById('liveChartsPanel').innerHTML='<div class="empty" style="padding:12px">Empieza a taggear para ver las gráficas</div>';
-  renderLiveLog();updateLiveSummary();resetAll();
-  document.getElementById('livePlayer').value='';document.getElementById('liveMain').style.display='none';
-  broadcastLive({active:false});
+  var labels=e.tags.map(tagLabel);var sc=computeScores(e.log,labels);
+  sessions.push({id:uid(),playerId:pid,playerName:e.name,date:new Date().toISOString(),rival:document.getElementById('msRival').value.trim()||'—',minutes:parseInt(document.getElementById('msMin').value)||0,obs:document.getElementById('msObs').value.trim(),log:[].concat(e.log),scores:{byTag:sc.byTag,globalPct:sc.globalPct},tagSnapshot:e.tags.map(function(t){return typeof t==='string'?{label:t,descYes:'',descNo:''}:{label:t.label,descYes:t.descYes||'',descNo:t.descNo||''};})});
+  save();closeModal('modalSession');
+  removeLiveCard(pid);
+  populateLiveSelect();
+  closingPlayerId=null;
+  broadcastRoster();
   toast('✅ Sesión guardada','#007818');
 }
 
