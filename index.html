@@ -603,7 +603,11 @@ function startPeriod(p){
   clearInterval(int1);clearInterval(int2);
   document.getElementById('liveDot').style.display='inline';
   if(p===1){int1=setInterval(function(){secs1++;document.getElementById('timer1').textContent=fmt(secs1);},1000);period=1;document.getElementById('btn1T').classList.add('running');document.getElementById('btn2T').classList.remove('running');document.getElementById('timer1').style.color='var(--orange)';document.getElementById('timer2').style.color='var(--muted)';}
-  else{int2=setInterval(function(){secs2++;document.getElementById('timer2').textContent=fmt(secs2);},1000);period=2;document.getElementById('btn2T').classList.add('running');document.getElementById('btn1T').classList.remove('running');document.getElementById('timer2').style.color='var(--orange)';document.getElementById('timer1').style.color='var(--muted)';}
+  else{
+    if(secs2===0)secs2=secs1; // el 2do tiempo continúa el reloj del partido, no reinicia en 0 (video continuo)
+    document.getElementById('timer2').textContent=fmt(secs2);
+    int2=setInterval(function(){secs2++;document.getElementById('timer2').textContent=fmt(secs2);},1000);period=2;document.getElementById('btn2T').classList.add('running');document.getElementById('btn1T').classList.remove('running');document.getElementById('timer2').style.color='var(--orange)';document.getElementById('timer1').style.color='var(--muted)';
+  }
   broadcastLive({period:period,secs1:secs1,secs2:secs2});
 }
 function pausePeriod(){if(!requireAdmin())return;clearInterval(int1);clearInterval(int2);document.getElementById('liveDot').style.display='none';document.getElementById('btn1T').classList.remove('running');document.getElementById('btn2T').classList.remove('running');broadcastLive({period:period,secs1:secs1,secs2:secs2});}
