@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="referrer" content="strict-origin-when-cross-origin">
 <title>EFC · Player Eval</title>
 <style>
 :root{--bg:#f5f6f8;--surface:#fff;--card:#fff;--border:#e2e6ea;--orange:#F0601A;--orange2:#c44e14;--green:#007818;--green2:#005c12;--text:#1a1f26;--muted:#6b7a8a;--danger:#e84040;--warn:#f5a623;}
@@ -75,6 +76,9 @@ label{font-size:12px;color:var(--muted);display:block;margin-bottom:3px;}
 .tl-marks{position:absolute;inset:0;}
 .clip-box{background:#000;border-radius:8px;overflow:hidden;}
 .clip-box video{width:100%;display:block;max-height:200px;object-fit:contain;}
+.yt-wrap{position:relative;width:100%;padding-bottom:56.25%;height:0;overflow:hidden;background:#000;}
+.yt-wrap iframe{position:absolute;top:0;left:0;width:100%!important;height:100%!important;border:0;}
+.yt-error{padding:24px 16px;text-align:center;color:#fff;font-size:12px;line-height:1.6;}
 .clip-controls{padding:10px;background:#111;display:flex;flex-direction:column;gap:8px;}
 .clip-range-row{display:flex;align-items:center;gap:6px;font-size:12px;color:#aaa;}
 .clip-range-row input[type=range]{flex:1;accent-color:var(--orange);}
@@ -887,15 +891,48 @@ function resetSessionVideo(){
   loadSessionVideo();
 }
 function onYouTubeIframeAPIReady(){ytApiReady=true;if(ytPendingVideoId){var id=ytPendingVideoId;ytPendingVideoId=null;initYoutubePlayer(id);}}
+var ytApiLoadCheck=setTimeout(function(){
+  if(!ytApiReady){
+    console.error('YouTube IFrame API no cargó (posible bloqueador de anuncios o red restringida)');
+  }
+},6000);
 function initYoutubePlayer(videoId){
-  if(!videoId)return;
-  if(!ytApiReady||typeof YT==='undefined'||!YT.Player){ytPendingVideoId=videoId;return;}
-  var container=document.getElementById('mdYtPlayer');container.innerHTML='<div id="ytPlayerEl"></div>';
-  ytPlayer=new YT.Player('ytPlayerEl',{
-    videoId:videoId,
-    playerVars:{playsinline:1,rel:0},
-    events:{onReady:function(){mdVidDur=ytPlayer.getDuration()||0;renderDetailTimeline();startProgressPoll();}}
-  });
+  if(!videoId){
+    document.getElementById('mdYtPlayer').innerHTML='<div class="yt-error">⚠️ El link de YouTube no es válido. Verifica que sea un link completo (youtube.com/watch?v=... o youtu.be/...)</div>';
+    return;
+  }
+  if(!ytApiReady||typeof YT==='undefined'||!YT.Player){
+    ytPendingVideoId=videoId;
+    document.getElementById('mdYtPlayer').innerHTML='<div class="yt-error" id="ytLoadingMsg">⏳ Cargando reproductor de YouTube...</div>';
+    setTimeout(function(){
+      if(!ytApiReady){
+        var el=document.getElementById('ytLoadingMsg');
+        if(el)el.innerHTML='⚠️ No se pudo cargar el reproductor de YouTube.<br>Puede ser un bloqueador de anuncios (uBlock, AdBlock, etc.) o restricción de red. Desactívalo para este sitio y recarga la página.';
+      }
+    },6000);
+    return;
+  }
+  var container=document.getElementById('mdYtPlayer');
+  container.innerHTML='<div class="yt-wrap"><div id="ytPlayerEl"></div></div>';
+  try{
+    ytPlayer=new YT.Player('ytPlayerEl',{
+      videoId:videoId,
+      playerVars:{playsinline:1,rel:0},
+      events:{
+        onReady:function(){mdVidDur=ytPlayer.getDuration()||0;renderDetailTimeline();startProgressPoll();},
+        onError:function(ev){
+          var codes={2:'El link de YouTube no es válido.',5:'Error de reproducción HTML5 en este video.',100:'El video no existe o es privado.',101:'El dueño del video desactivó la opción de "incrustar" (embed) este video en otras páginas. Debe activarla en YouTube Studio → Detalles → Más opciones → permitir incrustación.',150:'El dueño del video desactivó la opción de "incrustar" (embed) este video en otras páginas. Debe activarla en YouTube Studio → Detalles → Más opciones → permitir incrustación.'};
+          var msg=(codes[ev.data]||'No se pudo cargar el video de YouTube.')+' (código '+ev.data+')';
+          console.error('YouTube player error code:',ev.data);
+          container.innerHTML='<div class="yt-error">⚠️ '+msg+'</div>';
+          toast('⚠️ '+msg,'#e84040');
+        }
+      }
+    });
+  }catch(e){
+    console.error('Error creando reproductor de YouTube',e);
+    container.innerHTML='<div class="yt-error">⚠️ Error al crear el reproductor. Revisa la consola del navegador (F12).</div>';
+  }
 }
 function loadDetailVideo(input){
   var file=input.files[0];if(!file)return;
