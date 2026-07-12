@@ -392,10 +392,12 @@ tr:hover td{background:#fafafa;}
           </div>
         </div>
         <div id="mdYtNotice" style="display:none;margin-top:12px;padding:10px 12px;background:rgba(240,96,26,.06);border:1px solid rgba(240,96,26,.25);border-radius:8px;font-size:11px;color:var(--muted)">ℹ️ El compilado y descarga de clips solo está disponible con video adjuntado localmente (por restricciones de YouTube). Con un link de YouTube puedes ver y saltar a cada clip, pero no descargarlos.</div>
-        <div class="flex mt" style="gap:6px">
-          <label style="margin:0;white-space:nowrap;font-size:12px;color:var(--muted)">Offset (seg):</label>
-          <input id="mdOffset" type="number" value="0" style="width:78px" oninput="updateMdOffset()">
-          <span style="font-size:11px;color:var(--muted)">Diferencia entre cronómetro y video</span>
+        <div class="flex mt" style="gap:6px;flex-wrap:wrap">
+          <label style="margin:0;white-space:nowrap;font-size:12px;color:var(--muted)">Offset 1er T. (seg):</label>
+          <input id="mdOffset" type="number" value="0" style="width:70px" oninput="updateMdOffset()">
+          <label style="margin:0 0 0 10px;white-space:nowrap;font-size:12px;color:var(--muted)">Offset 2do T. (seg):</label>
+          <input id="mdOffset2" type="number" value="0" style="width:70px" oninput="updateMdOffset()">
+          <span style="font-size:11px;color:var(--muted);width:100%">Diferencia entre cronómetro y video (usa el 2do si el video tiene un corte en el entretiempo)</span>
         </div>
       </div>
       <input type="file" id="mdVidInput" accept="video/*" style="display:none" onchange="loadDetailVideo(this)">
@@ -413,9 +415,10 @@ var players=JSON.parse(localStorage.getItem('efc_players')||'[]');
 var sessions=JSON.parse(localStorage.getItem('efc_sessions')||'[]');
 var editingId=null,tempTags=[],liveRoster={},closingPlayerId=null;
 var period=0,secs1=0,secs2=0,int1=null,int2=null;
-var mdOffset=0,mdVidDur=0,currentSess=null,mdVideoSrc=null,mdVideoSessionId=null;
+var mdOffset=0,mdOffset2=0,mdVidDur=0,currentSess=null,mdVideoSrc=null,mdVideoSessionId=null;
+function offsetFor(per){return per===2?mdOffset2:mdOffset;}
 var mdMode=null,ytPlayer=null,ytApiReady=false,ytPendingVideoId=null,mdProgressInterval=null,clipMonitorInterval=null;
-var clipStartSecs=null,clipBeforeSecs=5,clipAfterSecs=5,clipLastBefore=5,clipLastAfter=5;
+var clipStartSecs=null,clipBeforeSecs=5,clipAfterSecs=5,clipLastBefore=5,clipLastAfter=5,clipLastPeriod=1;
 var chartGlobal=null,actionCharts={},compileAborted=false;
 
 /* FIREBASE SYNC */
@@ -828,10 +831,11 @@ function openDetail(sid){
   var labels=(p?p.tags:[]).map(tagLabel);var sc=s.scores||computeScores(s.log,labels);
   var col=function(pct){return pct>=90?'#007818':pct>=70?'#9a6500':'#c02020';};
   var breakdown=labels.map(function(t){var d=sc.byTag[t]||{yes:0,no:0};var tot=d.yes+d.no;var pct=tot>0?Math.round(d.yes/tot*100):null;var c=pct!==null?col(pct):'var(--muted)';return '<div style="margin-bottom:8px"><div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:2px"><span>'+t+'</span><span style="color:'+c+';font-weight:700">'+(pct!==null?pct+'%':'—')+' <span style="font-size:11px;color:var(--muted)">('+d.yes+'✅ '+d.no+'❌)</span></span></div><div class="pbar"><div class="pbar-fill" style="width:'+(pct||0)+'%;background:'+(pct!==null?col(pct):'var(--border)')+'"></div></div></div>';}).join('');
-  var logHtml=s.log.map(function(l){return '<div class="log-item"><span class="log-ts click" onclick="playClipFromRow('+l.secs+',this)">⏱'+l.ts+'</span><span class="log-period">'+l.period+'T</span><span class="log-icon">'+(l.result==='yes'?'✅':'❌')+'</span><span class="log-act">'+l.action+'</span><span class="clip-timing"><input type="number" value="'+clipBeforeSecs+'" min="1" max="60" class="cb-in">s<span style="color:var(--border);margin:0 2px">|</span><input type="number" value="'+clipAfterSecs+'" min="1" max="60" class="ca-in">s</span></div>';}).join('')||'<div class="empty">Vacío</div>';
+  var logHtml=s.log.map(function(l){return '<div class="log-item"><span class="log-ts click" onclick="playClipFromRow('+l.secs+','+l.period+',this)">⏱'+l.ts+'</span><span class="log-period">'+l.period+'T</span><span class="log-icon">'+(l.result==='yes'?'✅':'❌')+'</span><span class="log-act">'+l.action+'</span><span class="clip-timing"><input type="number" value="'+clipBeforeSecs+'" min="1" max="60" class="cb-in">s<span style="color:var(--border);margin:0 2px">|</span><input type="number" value="'+clipAfterSecs+'" min="1" max="60" class="ca-in">s</span></div>';}).join('')||'<div class="empty">Vacío</div>';
   document.getElementById('mdTitle').textContent=s.playerName+' · '+s.rival;
   document.getElementById('mdContent').innerHTML='<div class="grid2" style="margin-bottom:10px"><div class="stat-box"><div class="val">'+s.minutes+"'</div><div class=\"lbl\">Minutos</div></div><div class=\"stat-box\"><div class=\"val\" style=\"color:"+(sc.globalPct!=null?col(sc.globalPct):'var(--muted)')+'">'+( sc.globalPct!=null?sc.globalPct+'%':'—')+'</div><div class="lbl">Acierto global</div></div></div><div style="font-size:12px;color:var(--muted);margin-bottom:10px">📅 '+new Date(s.date).toLocaleString('es-CO')+'</div>'+(s.obs?'<div style="background:#f9fafb;border-radius:7px;padding:9px;font-size:13px;margin-bottom:10px;border:1px solid var(--border)">'+s.obs+'</div>':'')+'<h3 style="margin-bottom:8px">Acierto por acción</h3>'+(breakdown||'<div class="empty">Sin datos</div>')+'<h3 style="margin:12px 0 7px">Log — toca ⏱ para clip</h3><div class="log-list" style="max-height:180px">'+logHtml+'</div>';
   mdOffset=currentSess.videoOffset||0;document.getElementById('mdOffset').value=mdOffset;
+  mdOffset2=currentSess.videoOffset2||0;document.getElementById('mdOffset2').value=mdOffset2;
   openModal('modalDetail');
   loadSessionVideo();
 }
@@ -949,12 +953,13 @@ function loadDetailVideo(input){
 }
 function updateMdOffset(){
   mdOffset=parseFloat(document.getElementById('mdOffset').value)||0;
+  mdOffset2=parseFloat(document.getElementById('mdOffset2').value)||0;
   renderDetailTimeline();
-  if(currentSess&&isAdmin){currentSess.videoOffset=mdOffset;save();}
+  if(currentSess&&isAdmin){currentSess.videoOffset=mdOffset;currentSess.videoOffset2=mdOffset2;save();}
 }
 function renderDetailTimeline(){
   var wrap=document.getElementById('mdTlMarks');wrap.innerHTML='';if(!mdVidDur||!currentSess)return;
-  currentSess.log.forEach(function(l){var adj=l.secs+mdOffset,pct=Math.min(100,Math.max(0,(adj/mdVidDur)*100));var dot=document.createElement('div');Object.assign(dot.style,{position:'absolute',left:pct+'%',top:'3px',bottom:'3px',width:'4px',borderRadius:'2px',background:l.result==='yes'?'#007818':'#e84040',cursor:'pointer',transform:'translateX(-50%)'});dot.onclick=function(){playClip(l.secs,clipBeforeSecs,clipAfterSecs);};wrap.appendChild(dot);});
+  currentSess.log.forEach(function(l){var adj=l.secs+offsetFor(l.period),pct=Math.min(100,Math.max(0,(adj/mdVidDur)*100));var dot=document.createElement('div');Object.assign(dot.style,{position:'absolute',left:pct+'%',top:'3px',bottom:'3px',width:'4px',borderRadius:'2px',background:l.result==='yes'?'#007818':'#e84040',cursor:'pointer',transform:'translateX(-50%)'});dot.onclick=function(){playClip(l.secs,clipBeforeSecs,clipAfterSecs,l.period);};wrap.appendChild(dot);});
 }
 function pbCurrentTime(){
   if(mdMode==='local')return document.getElementById('mdVideo').currentTime;
@@ -987,18 +992,19 @@ document.getElementById('mdTlWrap').addEventListener('click',function(e){
   var rect=e.currentTarget.getBoundingClientRect();
   pbSeek(((e.clientX-rect.left)/rect.width)*mdVidDur);
 });
-function playClip(secs,before,after){
+function playClip(secs,before,after,per){
   if(!mdMode){toast('Primero adjunta un video o pega un link de YouTube','#e84040');return;}
-  clipStartSecs=secs;clipLastBefore=before;clipLastAfter=after;
-  var start=Math.max(0,secs+mdOffset-before),end=secs+mdOffset+after;
+  clipStartSecs=secs;clipLastBefore=before;clipLastAfter=after;clipLastPeriod=per||1;
+  var off=offsetFor(clipLastPeriod);
+  var start=Math.max(0,secs+off-before),end=secs+off+after;
   document.getElementById('clipLabel').textContent='Clip: '+fmt(secs)+' ('+before+'s antes · '+after+'s después)';
   document.getElementById('clipReplayBtn').style.display='inline-flex';
   pbSeek(start);pbPlay();
   clearInterval(clipMonitorInterval);
   clipMonitorInterval=setInterval(function(){if(pbCurrentTime()>=end){pbPause();clearInterval(clipMonitorInterval);}},200);
 }
-function playClipFromRow(secs,el){var row=el.closest('.log-item');var before=parseInt(row.querySelector('.cb-in').value)||clipBeforeSecs;var after=parseInt(row.querySelector('.ca-in').value)||clipAfterSecs;playClip(secs,before,after);}
-function replayClip(){if(clipStartSecs!==null)playClip(clipStartSecs,clipLastBefore,clipLastAfter);}
+function playClipFromRow(secs,per,el){var row=el.closest('.log-item');var before=parseInt(row.querySelector('.cb-in').value)||clipBeforeSecs;var after=parseInt(row.querySelector('.ca-in').value)||clipAfterSecs;playClip(secs,before,after,per);}
+function replayClip(){if(clipStartSecs!==null)playClip(clipStartSecs,clipLastBefore,clipLastAfter,clipLastPeriod);}
 function updateClipRange(){clipBeforeSecs=parseInt(document.getElementById('clipBefore').value)||5;clipAfterSecs=parseInt(document.getElementById('clipAfter').value)||5;document.getElementById('clipBeforeVal').textContent=clipBeforeSecs+'s';document.getElementById('clipAfterVal').textContent=clipAfterSecs+'s';}
 
 /* COMPILADO (solo disponible con video local, por restricciones de CORS de YouTube) */
@@ -1033,7 +1039,7 @@ function startCompile(){
     if(compileAborted||clipIndex>=clips.length){cancelAnimationFrame(frameLoop);recorder.stop();return;}
     document.getElementById('compileProgressBar').style.width=Math.round((clipIndex/clips.length)*100)+'%';
     document.getElementById('compileProgressLabel').textContent='Clip '+(clipIndex+1)+' de '+clips.length;
-    var secs=clips[clipIndex].secs,start=Math.max(0,secs+mdOffset-clipBeforeSecs),end=secs+mdOffset+clipAfterSecs;
+    var secs=clips[clipIndex].secs,off=offsetFor(clips[clipIndex].period),start=Math.max(0,secs+off-clipBeforeSecs),end=secs+off+clipAfterSecs;
     vid.currentTime=start;
     vid.onseeked=function(){vid.onseeked=null;vid.play();vid.ontimeupdate=function(){if(compileAborted){vid.pause();vid.ontimeupdate=null;cancelAnimationFrame(frameLoop);recorder.stop();return;}if(vid.currentTime>=end){vid.pause();vid.ontimeupdate=null;clipIndex++;setTimeout(playNextClip,80);}};};
   }playNextClip();
