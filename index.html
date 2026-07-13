@@ -30,6 +30,7 @@ h3{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;le
 .btn-sm{padding:5px 11px;font-size:12px;}
 .btn-period{flex:1;padding:10px;border-radius:8px;border:2px solid var(--border);background:var(--bg);color:var(--muted);cursor:pointer;font-size:13px;font-weight:700;transition:all .2s;text-align:center;}
 .btn-period.running{border-color:var(--green);color:var(--green);background:rgba(0,120,24,.06);animation:pulse 2s infinite;}
+.btn-period.pr-active{border-color:var(--orange);color:var(--orange);background:rgba(240,96,26,.06);}
 @keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(0,120,24,.2)}50%{box-shadow:0 0 0 6px rgba(0,120,24,0)}}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
 .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
@@ -136,6 +137,7 @@ tr:hover td{background:#fafafa;}
   <div class="nav-links">
     <button class="active" data-page="jugadores">Jugadores</button>
     <button data-page="live">Sesión en Vivo</button>
+    <button data-page="pregrabada">Sesión Pregrabada</button>
     <button data-page="historial">Historial</button>
     <button data-page="dashboard">Dashboard</button>
   </div>
@@ -182,6 +184,51 @@ tr:hover td{background:#fafafa;}
   </div>
   <div class="empty" id="liveRosterEmpty" style="margin-top:12px">Agrega uno o más jugadores para empezar a taggear</div>
   <div id="liveRosterGrid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px;margin-top:12px"></div>
+</div>
+
+<!-- PREGRABADA -->
+<div class="page" id="pg-pregrabada">
+  <div class="card card-ol">
+    <h3 style="margin-bottom:10px">📹 Video del Partido</h3>
+    <div id="prVidPlaceholder" class="vid-placeholder" style="display:flex;flex-direction:column;gap:10px;padding:16px">
+      <div style="text-align:center;cursor:pointer" onclick="document.getElementById('prVidInput').click()">
+        <div style="font-size:26px">🎬</div>
+        <div>Adjuntar archivo de video</div>
+        <div style="font-size:11px;color:var(--muted)">MP4, MOV — procesado solo en este dispositivo</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--muted)"><hr style="flex:1;border:none;border-top:1px solid var(--border)">o<hr style="flex:1;border:none;border-top:1px solid var(--border)"></div>
+      <div>
+        <div style="display:flex;gap:6px">
+          <input id="prYtInput" placeholder="Pega el link de YouTube del partido..." style="flex:1" onkeydown="if(event.key==='Enter')prAttachYoutubeLink()">
+          <button class="btn btn-orange btn-sm" onclick="prAttachYoutubeLink()">🔗 Usar link</button>
+        </div>
+        <div style="font-size:10px;color:var(--muted);text-align:center;margin-top:5px">Con YouTube, el link queda guardado automáticamente en cada sesión que cierres — se ve sincronizado desde cualquier dispositivo, sin offset que ajustar.</div>
+      </div>
+    </div>
+    <input type="file" id="prVidInput" accept="video/*" style="display:none" onchange="prLoadLocalVideo(this)">
+    <div id="prVidWrap" style="display:none">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <span style="font-size:11px;color:var(--muted)" id="prVidModeLabel"></span>
+        <button class="btn btn-ghost btn-sm" style="padding:3px 8px;font-size:10px" onclick="prResetVideo()">🔄 Cambiar video</button>
+      </div>
+      <div class="tl-wrap" id="prTlWrap"><div class="tl-prog" id="prTlProg"></div></div>
+      <div class="clip-box" style="margin-top:8px">
+        <video id="prVideo" controls style="display:none"></video>
+        <div id="prYtPlayerEl" style="display:none"></div>
+      </div>
+      <div class="flex mt" style="gap:8px;align-items:center">
+        <button class="btn-period" id="prBtn1T" onclick="prSetPeriod(1)">1er Tiempo</button>
+        <button class="btn-period" id="prBtn2T" onclick="prSetPeriod(2)">2do Tiempo</button>
+        <span style="font-size:11px;color:var(--muted)">Marca en qué mitad vas mientras taggeas</span>
+      </div>
+    </div>
+  </div>
+  <div class="card card-ol" style="margin-top:12px">
+    <h3>Agregar jugador a la sesión</h3>
+    <select id="prAddPlayerSel" onchange="prAddPlayer()"><option value="">— Seleccionar —</option></select>
+  </div>
+  <div class="empty" id="prRosterEmpty" style="margin-top:12px">Agrega uno o más jugadores para empezar a taggear</div>
+  <div id="prRosterGrid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px;margin-top:12px"></div>
 </div>
 
 <!-- HISTORIAL -->
@@ -409,11 +456,11 @@ tr:hover td{background:#fafafa;}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
-<script src="https://www.youtube.com/iframe_api"></script>
 <script>
 var players=JSON.parse(localStorage.getItem('efc_players')||'[]');
 var sessions=JSON.parse(localStorage.getItem('efc_sessions')||'[]');
-var editingId=null,tempTags=[],liveRoster={},closingPlayerId=null;
+var editingId=null,tempTags=[],liveRoster={},closingPlayerId=null,closingSource='live';
+var prRoster={},prMode=null,prVideoSrc=null,prYtPlayer=null,prYtPendingVideoId=null,prVidDur=0,prPeriod=1,prChartInstances={},prProgressInterval=null,prYoutubeUrl=null;
 var period=0,secs1=0,secs2=0,int1=null,int2=null;
 var mdOffset=0,mdOffset2=0,mdVidDur=0,currentSess=null,mdVideoSrc=null,mdVideoSessionId=null;
 function offsetFor(per){return per===2?mdOffset2:mdOffset;}
@@ -465,6 +512,7 @@ function refreshCurrentView(){
   var active=document.querySelector('.page.active');
   var pg=active?active.id.replace('pg-',''):'jugadores';
   if(pg==='live')populateLiveSelect();
+  if(pg==='pregrabada')prPopulateAddSelect();
   if(pg==='historial'){populateHistFilter();renderHistorial();}
   if(pg==='dashboard')populateDashSelect();
 }
@@ -524,8 +572,8 @@ function updateAdminBadge(){
   var b=document.getElementById('adminBadge');if(!b)return;
   if(isAdmin){b.textContent='✏️ Modo Admin';b.style.background='rgba(0,120,24,.1)';b.style.color='var(--green)';b.style.borderColor='var(--green)';}
   else{b.textContent='👁 Solo lectura';b.style.background='rgba(107,122,138,.1)';b.style.color='var(--muted)';b.style.borderColor='var(--border)';}
-  ['liveAddPlayer','btn1T','btn2T'].forEach(function(id){var el=document.getElementById(id);if(el)el.disabled=!isAdmin;});
-  document.querySelectorAll('#pg-live .btn-ghost.btn-sm, #pg-live .btn-warn.btn-sm').forEach(function(el){el.disabled=!isAdmin;el.style.opacity=isAdmin?'1':'.5';});
+  ['liveAddPlayer','btn1T','btn2T','prAddPlayerSel','prBtn1T','prBtn2T'].forEach(function(id){var el=document.getElementById(id);if(el)el.disabled=!isAdmin;});
+  document.querySelectorAll('#pg-live .btn-ghost.btn-sm, #pg-live .btn-warn.btn-sm, #pg-pregrabada .btn-ghost.btn-sm, #pg-pregrabada .btn-warn.btn-sm, #pg-pregrabada .btn-orange.btn-sm').forEach(function(el){el.disabled=!isAdmin;el.style.opacity=isAdmin?'1':'.5';});
 }
 function toggleAdmin(){
   if(isAdmin){
@@ -587,6 +635,7 @@ document.querySelectorAll('nav button').forEach(function(btn){
     document.getElementById('pg-'+pg).classList.add('active');
     if(pg==='jugadores')renderPlayers();
     if(pg==='live')populateLiveSelect();
+    if(pg==='pregrabada')prPopulateAddSelect();
     if(pg==='historial'){populateHistFilter();renderHistorial();}
     if(pg==='dashboard')populateDashSelect();
   });
@@ -688,6 +737,7 @@ function playerCardHTML(pid){
     '<div class="sh" style="margin-bottom:2px"><h2 style="margin:0;font-size:13px">'+esc((liveRoster[pid]||{}).name||'')+'</h2>'+
       '<div style="display:flex;gap:6px;align-items:center">'+
         '<span style="font-size:11px;color:var(--muted)" id="liveSum_'+pid+'"></span>'+
+        '<button class="btn btn-ghost btn-sm" style="padding:4px 8px;font-size:11px" title="Quitar sin guardar" onclick="discardLivePlayer(\''+pid+'\')">✕</button>'+
         '<button class="btn btn-warn btn-sm" style="padding:4px 9px;font-size:11px" onclick="openCloseSession(\''+pid+'\')">Cerrar</button>'+
       '</div>'+
     '</div>'+
@@ -699,6 +749,16 @@ function playerCardHTML(pid){
   '</div>';
 }
 function removeLiveCard(pid){destroyLiveChart(pid);var el=document.getElementById('pcard_'+pid);if(el)el.remove();delete liveRoster[pid];var pids=Object.keys(liveRoster);document.getElementById('liveRosterEmpty').style.display=pids.length?'none':'block';}
+function discardLivePlayer(pid){
+  if(!requireAdmin())return;
+  var e=liveRoster[pid];if(!e)return;
+  showConfirm('Quitar jugador','¿Quitar a '+e.name+' de la sesión en vivo? Se perderá todo lo registrado (no se guarda).',function(){
+    removeLiveCard(pid);
+    populateLiveSelect();
+    broadcastRoster();
+    toast('Jugador quitado de la sesión');
+  });
+}
 function renderTagGrid(pid){
   var e=liveRoster[pid];if(!e)return;
   var g=document.getElementById('liveTagGrid_'+pid);if(!g)return;
@@ -785,10 +845,11 @@ function delLog(pid,id){
   broadcastRoster();
 }
 
-function openCloseSession(pid){
+function openCloseSession(pid,source){
   if(!requireAdmin())return;
-  var e=liveRoster[pid];if(!e)return;
-  closingPlayerId=pid;
+  source=source||'live';
+  var e=(source==='pregrabada'?prRoster:liveRoster)[pid];if(!e)return;
+  closingPlayerId=pid;closingSource=source;
   var labels=e.tags.map(tagLabel);var sc=computeScores(e.log,labels);
   var col=function(pct){return pct>=90?'#007818':pct>=70?'#9a6500':'#c02020';};
   document.getElementById('scoreBreakdown').innerHTML=labels.map(function(t){var d=sc.byTag[t]||{yes:0,no:0};var tot=d.yes+d.no;var pct=tot>0?Math.round(d.yes/tot*100):null;var c=pct!==null?col(pct):'var(--muted)';return '<div style="margin-bottom:9px"><div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:2px"><span>'+t+'</span><span style="font-weight:700;color:'+c+'">'+(pct!==null?pct+'%':'—')+' <span style="font-size:11px;color:var(--muted)">('+d.yes+'✅ '+d.no+'❌)</span></span></div><div class="pbar"><div class="pbar-fill" style="width:'+(pct||0)+'%;background:'+(pct!==null?col(pct):'var(--border)')+'"></div></div></div>';}).join('')||'<div class="empty">Sin acciones</div>';
@@ -800,17 +861,250 @@ function openCloseSession(pid){
 function saveSession(){
   if(!requireAdmin())return;
   var pid=closingPlayerId;if(!pid)return;
-  var e=liveRoster[pid];if(!e)return;
-  var p=players.find(function(x){return x.id===pid;});
+  var roster=closingSource==='pregrabada'?prRoster:liveRoster;
+  var e=roster[pid];if(!e)return;
   var labels=e.tags.map(tagLabel);var sc=computeScores(e.log,labels);
-  sessions.push({id:uid(),playerId:pid,playerName:e.name,date:new Date().toISOString(),rival:document.getElementById('msRival').value.trim()||'—',minutes:parseInt(document.getElementById('msMin').value)||0,obs:document.getElementById('msObs').value.trim(),log:[].concat(e.log),scores:{byTag:sc.byTag,globalPct:sc.globalPct},tagSnapshot:e.tags.map(function(t){return typeof t==='string'?{label:t,descYes:'',descNo:''}:{label:t.label,descYes:t.descYes||'',descNo:t.descNo||''};})});
+  var sessObj={id:uid(),playerId:pid,playerName:e.name,date:new Date().toISOString(),rival:document.getElementById('msRival').value.trim()||'—',minutes:parseInt(document.getElementById('msMin').value)||0,obs:document.getElementById('msObs').value.trim(),log:[].concat(e.log),scores:{byTag:sc.byTag,globalPct:sc.globalPct},tagSnapshot:e.tags.map(function(t){return typeof t==='string'?{label:t,descYes:'',descNo:''}:{label:t.label,descYes:t.descYes||'',descNo:t.descNo||''};})};
+  if(closingSource==='pregrabada'&&prMode==='youtube'&&prYoutubeUrl){sessObj.videoUrl=prYoutubeUrl;sessObj.videoOffset=0;sessObj.videoOffset2=0;}
+  sessions.push(sessObj);
   save();closeModal('modalSession');
-  removeLiveCard(pid);
-  populateLiveSelect();
+  if(closingSource==='pregrabada'){prRemoveCard(pid);prPopulateAddSelect();}
+  else{removeLiveCard(pid);populateLiveSelect();broadcastRoster();}
   closingPlayerId=null;
-  broadcastRoster();
   toast('✅ Sesión guardada','#007818');
 }
+
+/* PREGRABADA */
+function prGetCurrentTime(){var t=Math.floor(prCurrentTime());return {secs:t,period:prPeriod,ts:fmt(t)};}
+function prSetPeriod(p){
+  prPeriod=p;
+  document.getElementById('prBtn1T').classList.toggle('pr-active',p===1);
+  document.getElementById('prBtn2T').classList.toggle('pr-active',p===2);
+}
+function prAttachYoutubeLink(){
+  if(!requireAdmin()){document.getElementById('prYtInput').value='';return;}
+  var url=document.getElementById('prYtInput').value.trim();if(!url)return;
+  var vidId=extractYoutubeId(url);
+  if(!vidId){toast('Link de YouTube no válido','#e84040');return;}
+  prYoutubeUrl=url;
+  prLoadVideoState('youtube',vidId);
+}
+function prLoadLocalVideo(input){
+  if(!requireAdmin()){input.value='';return;}
+  var file=input.files[0];if(!file)return;
+  if(prVideoSrc)URL.revokeObjectURL(prVideoSrc);
+  prVideoSrc=URL.createObjectURL(file);
+  input.value='';
+  prLoadVideoState('local');
+}
+function prResetVideo(){
+  if(!requireAdmin())return;
+  if(prMode==='youtube'){prYoutubeUrl=null;}
+  else if(prMode==='local'){if(prVideoSrc)URL.revokeObjectURL(prVideoSrc);prVideoSrc=null;}
+  prLoadVideoState(null);
+}
+function prLoadVideoState(mode,ytId){
+  clearInterval(prProgressInterval);
+  var vid=document.getElementById('prVideo');vid.pause();vid.removeAttribute('src');vid.load();vid.style.display='none';
+  if(prYtPlayer&&prYtPlayer.destroy){try{prYtPlayer.destroy();}catch(e){}prYtPlayer=null;}
+  document.getElementById('prYtPlayerEl').innerHTML='';document.getElementById('prYtPlayerEl').style.display='none';
+  document.getElementById('prTlProg').style.width='0%';
+  if(mode==='youtube'){
+    prMode='youtube';prVidDur=0;
+    document.getElementById('prVidPlaceholder').style.display='none';
+    document.getElementById('prVidWrap').style.display='block';
+    document.getElementById('prYtPlayerEl').style.display='block';
+    document.getElementById('prVidModeLabel').textContent='🔗 YouTube — quedará vinculado a cada sesión que guardes';
+    prInitYoutubePlayer(ytId);
+  } else if(mode==='local'&&prVideoSrc){
+    prMode='local';
+    document.getElementById('prVidPlaceholder').style.display='none';
+    document.getElementById('prVidWrap').style.display='block';
+    vid.style.display='block';
+    document.getElementById('prVidModeLabel').textContent='💻 Video local — solo en este dispositivo';
+    vid.src=prVideoSrc;
+    vid.addEventListener('loadedmetadata',function(){prVidDur=vid.duration;prStartProgressPoll();},{once:true});
+  } else {
+    prMode=null;prVidDur=0;
+    document.getElementById('prVidPlaceholder').style.display='flex';
+    document.getElementById('prVidWrap').style.display='none';
+    document.getElementById('prYtInput').value='';
+  }
+}
+function prInitYoutubePlayer(videoId){
+  var container=document.getElementById('prYtPlayerEl');
+  if(!videoId){container.innerHTML='<div class="yt-error">⚠️ El link de YouTube no es válido.</div>';return;}
+  if(!ytApiReady||typeof YT==='undefined'||!YT.Player){
+    prYtPendingVideoId=videoId;
+    container.innerHTML='<div class="yt-error" id="prYtLoadingMsg">⏳ Cargando reproductor de YouTube...</div>';
+    setTimeout(function(){if(!ytApiReady){var el=document.getElementById('prYtLoadingMsg');if(el)el.innerHTML='⚠️ No se pudo cargar el reproductor de YouTube.<br>Puede ser un bloqueador de anuncios o restricción de red.';}},6000);
+    return;
+  }
+  container.innerHTML='<div class="yt-wrap"><div id="prYtEl"></div></div>';
+  try{
+    prYtPlayer=new YT.Player('prYtEl',{
+      videoId:videoId,
+      playerVars:{playsinline:1,rel:0},
+      events:{
+        onReady:function(){prVidDur=prYtPlayer.getDuration()||0;prStartProgressPoll();},
+        onError:function(ev){
+          var codes={2:'El link de YouTube no es válido.',5:'Error de reproducción HTML5 en este video.',100:'El video no existe o es privado.',101:'El dueño del video desactivó la opción de "incrustar" (embed) este video en otras páginas.',150:'El dueño del video desactivó la opción de "incrustar" (embed) este video en otras páginas.',153:'YouTube bloqueó la reproducción por falta de referer (revisa que estés en el link publicado, no en un archivo local).'};
+          var msg=(codes[ev.data]||'No se pudo cargar el video de YouTube.')+' (código '+ev.data+')';
+          console.error('YouTube player error code:',ev.data);
+          container.innerHTML='<div class="yt-error">⚠️ '+msg+'</div>';
+          toast('⚠️ '+msg,'#e84040');
+        }
+      }
+    });
+  }catch(e){console.error('Error creando reproductor de YouTube',e);container.innerHTML='<div class="yt-error">⚠️ Error al crear el reproductor.</div>';}
+}
+function prCurrentTime(){
+  if(prMode==='local')return document.getElementById('prVideo').currentTime;
+  if(prMode==='youtube'&&prYtPlayer&&prYtPlayer.getCurrentTime)return prYtPlayer.getCurrentTime();
+  return 0;
+}
+function prSeek(t){
+  if(prMode==='local')document.getElementById('prVideo').currentTime=t;
+  else if(prMode==='youtube'&&prYtPlayer&&prYtPlayer.seekTo)prYtPlayer.seekTo(t,true);
+}
+function prStartProgressPoll(){
+  clearInterval(prProgressInterval);
+  prProgressInterval=setInterval(function(){
+    if(!prMode||!prVidDur)return;
+    var t=prCurrentTime();
+    document.getElementById('prTlProg').style.width=Math.min(100,Math.max(0,(t/prVidDur*100)))+'%';
+  },300);
+}
+document.getElementById('prTlWrap').addEventListener('click',function(e){
+  if(!prMode||!prVidDur)return;
+  var rect=e.currentTarget.getBoundingClientRect();
+  prSeek(((e.clientX-rect.left)/rect.width)*prVidDur);
+});
+
+function prPopulateAddSelect(){
+  var sel=document.getElementById('prAddPlayerSel');
+  sel.innerHTML='<option value="">— Seleccionar —</option>'+players.filter(function(p){return !prRoster[p.id];}).map(function(p){return '<option value="'+p.id+'">'+p.name+'</option>';}).join('');
+}
+function prAddPlayer(){
+  if(!requireAdmin()){document.getElementById('prAddPlayerSel').value='';return;}
+  var sel=document.getElementById('prAddPlayerSel');
+  var id=sel.value;if(!id)return;
+  sel.value='';
+  var p=players.find(function(x){return x.id===id;});if(!p||prRoster[id])return;
+  prRoster[id]={name:p.name,tags:p.tags,log:[]};
+  document.getElementById('prRosterEmpty').style.display='none';
+  document.getElementById('prRosterGrid').insertAdjacentHTML('beforeend',prPlayerCardHTML(id));
+  prRenderTagGrid(id);prRenderLog(id);prUpdateSummary(id);prUpdateChart(id);
+  prPopulateAddSelect();
+}
+function prRemoveCard(pid){prDestroyChart(pid);var el=document.getElementById('prcard_'+pid);if(el)el.remove();delete prRoster[pid];var pids=Object.keys(prRoster);document.getElementById('prRosterEmpty').style.display=pids.length?'none':'block';}
+function prDiscardPlayer(pid){
+  if(!requireAdmin())return;
+  var e=prRoster[pid];if(!e)return;
+  showConfirm('Quitar jugador','¿Quitar a '+e.name+' de la sesión pregrabada? Se perderá todo lo registrado (no se guarda).',function(){
+    prRemoveCard(pid);prPopulateAddSelect();toast('Jugador quitado de la sesión');
+  });
+}
+function prPlayerCardHTML(pid){
+  return '<div class="card card-ol" id="prcard_'+pid+'" style="display:flex;flex-direction:column;gap:6px;padding:12px">'+
+    '<div class="sh" style="margin-bottom:2px"><h2 style="margin:0;font-size:13px">'+esc((prRoster[pid]||{}).name||'')+'</h2>'+
+      '<div style="display:flex;gap:6px;align-items:center">'+
+        '<span style="font-size:11px;color:var(--muted)" id="prSum_'+pid+'"></span>'+
+        '<button class="btn btn-ghost btn-sm" style="padding:4px 8px;font-size:11px" title="Quitar sin guardar" onclick="prDiscardPlayer(\''+pid+'\')">✕</button>'+
+        '<button class="btn btn-warn btn-sm" style="padding:4px 9px;font-size:11px" onclick="openCloseSession(\''+pid+'\',\'pregrabada\')">Cerrar</button>'+
+      '</div>'+
+    '</div>'+
+    '<div id="prTagGrid_'+pid+'"></div>'+
+    '<div style="height:140px;margin:2px 0"><canvas id="prChart_'+pid+'"></canvas></div>'+
+    '<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-top:2px">Registro</div>'+
+    '<div class="log-list" id="prLog_'+pid+'" style="max-height:150px"></div>'+
+    '<div class="empty" id="prLogEmpty_'+pid+'" style="display:none">Sin acciones aún</div>'+
+  '</div>';
+}
+function prRenderTagGrid(pid){
+  var e=prRoster[pid];if(!e)return;
+  var g=document.getElementById('prTagGrid_'+pid);if(!g)return;
+  var tags=e.tags;
+  if(!tags.length){g.innerHTML='<div class="empty">Sin acciones. Edita el jugador.</div>';return;}
+  g.innerHTML=tags.map(function(t){
+    var lbl=tagLabel(t),dy=tagDescYes(t),dn=tagDescNo(t);
+    var k=lbl.replace(/[^a-z0-9]/gi,'_');
+    var safe=lbl.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+    var tip=esc((dy?'✅ '+dy:'')+(dy&&dn?' · ':'')+(dn?'❌ '+dn:''));
+    return '<div class="tag-row"><span class="tag-row-label" title="'+tip+'">⚡ '+lbl+'</span>'+
+      '<button class="tb-y-sm" onclick="prTagAction(\''+pid+'\',\''+safe+'\',\'yes\',this)">✅</button>'+
+      '<button class="tb-n-sm" onclick="prTagAction(\''+pid+'\',\''+safe+'\',\'no\',this)">❌</button>'+
+      '<span class="tag-row-count" id="prc_'+pid+'_'+k+'">0/0</span></div>';
+  }).join('');
+}
+function prTagAction(pid,action,result,btn){
+  if(!requireAdmin())return;
+  if(!prMode){toast('Primero adjunta un video o pega un link de YouTube','#e84040');return;}
+  var e=prRoster[pid];if(!e)return;
+  var cur=prGetCurrentTime();
+  e.log.unshift({id:uid(),action:action,result:result,ts:cur.ts,secs:cur.secs,period:cur.period});
+  btn.style.opacity='.45';setTimeout(function(){btn.style.opacity='1';},180);
+  var k=action.replace(/[^a-z0-9]/gi,'_');
+  var y=e.log.filter(function(l){return l.action===action&&l.result==='yes';}).length;
+  var n=e.log.filter(function(l){return l.action===action&&l.result==='no';}).length;
+  var el=document.getElementById('prc_'+pid+'_'+k);if(el)el.textContent=y+'✅ '+n+'❌';
+  prRenderLog(pid);prUpdateSummary(pid);prUpdateChart(pid);
+}
+function prUpdateSummary(pid){
+  var e=prRoster[pid];if(!e)return;
+  var sc=computeScores(e.log,[]),el=document.getElementById('prSum_'+pid);if(!el)return;
+  if(sc.globalPct===null){el.textContent='';return;}
+  el.innerHTML='<strong style="color:'+colPct(sc.globalPct)+'">'+sc.globalPct+'%</strong>';
+}
+function prRenderLog(pid){
+  var e=prRoster[pid];if(!e)return;
+  var el=document.getElementById('prLog_'+pid),em=document.getElementById('prLogEmpty_'+pid);
+  if(!el)return;
+  if(!e.log.length){el.innerHTML='';em.style.display='block';return;}
+  em.style.display='none';
+  el.innerHTML=e.log.map(function(l){
+    return '<div class="log-item"><span class="log-ts click" onclick="prPlayClip('+l.secs+',this)">⏱'+l.ts+'</span><span class="log-period">'+l.period+'T</span><span class="log-icon">'+(l.result==='yes'?'✅':'❌')+'</span><span class="log-act">'+l.action+'</span><span class="log-del" onclick="prDelLog(\''+pid+'\',\''+l.id+'\')">×</span></div>';
+  }).join('');
+}
+function prDelLog(pid,id){
+  if(!requireAdmin())return;
+  var e=prRoster[pid];if(!e)return;
+  e.log=e.log.filter(function(x){return x.id!==id;});
+  prRenderLog(pid);prUpdateSummary(pid);prUpdateChart(pid);
+}
+function prPlayClip(secs,el){if(prMode)prSeek(secs);}
+function prUpdateChart(pid){
+  var e=prRoster[pid];if(!e)return;
+  var canvas=document.getElementById('prChart_'+pid);if(!canvas)return;
+  var labels=e.tags.map(tagLabel);
+  var yes=[],no=[];
+  labels.forEach(function(lbl){
+    var y=0,n=0;
+    e.log.forEach(function(l){if(l.action===lbl){if(l.result==='yes')y++;else n++;}});
+    yes.push(y);no.push(n);
+  });
+  if(prChartInstances[pid]){
+    var ch=prChartInstances[pid];
+    ch.data.labels=labels;ch.data.datasets[0].data=yes;ch.data.datasets[1].data=no;ch.update('none');
+  } else {
+    prChartInstances[pid]=new Chart(canvas,{
+      type:'bar',
+      data:{labels:labels,datasets:[
+        {label:'Ejecutó',data:yes,backgroundColor:'#007818',borderRadius:3,barThickness:12},
+        {label:'No ejecutó',data:no,backgroundColor:'#e84040',borderRadius:3,barThickness:12}
+      ]},
+      options:{
+        indexAxis:'y',responsive:true,maintainAspectRatio:false,animation:{duration:200},
+        scales:{
+          x:{beginAtZero:true,ticks:{stepSize:1,precision:0,color:'#6b7a8a',font:{size:9}},grid:{color:'rgba(0,0,0,.06)'}},
+          y:{ticks:{color:'#1a1f26',font:{size:9}},grid:{display:false}}
+        },
+        plugins:{legend:{display:false},tooltip:{callbacks:{label:function(ctx){return ctx.dataset.label+': '+ctx.raw;}}}}
+      }
+    });
+  }
+}
+function prDestroyChart(pid){if(prChartInstances[pid]){try{prChartInstances[pid].destroy();}catch(e){}delete prChartInstances[pid];}}
 
 /* HISTORIAL */
 function populateHistFilter(){var sel=document.getElementById('histFilter'),cur=sel.value;sel.innerHTML='<option value="">Todos los jugadores</option>'+players.map(function(p){return '<option value="'+p.id+'">'+p.name+'</option>';}).join('');sel.value=cur;}
@@ -898,12 +1192,35 @@ function resetSessionVideo(){
   }
   loadSessionVideo();
 }
-function onYouTubeIframeAPIReady(){ytApiReady=true;if(ytPendingVideoId){var id=ytPendingVideoId;ytPendingVideoId=null;initYoutubePlayer(id);}}
-var ytApiLoadCheck=setTimeout(function(){
+function onYouTubeIframeAPIReady(){
+  ytApiReady=true;
+  if(ytPendingVideoId){var id=ytPendingVideoId;ytPendingVideoId=null;initYoutubePlayer(id);}
+  if(prYtPendingVideoId){var id2=prYtPendingVideoId;prYtPendingVideoId=null;prInitYoutubePlayer(id2);}
+}
+var ytApiAttempts=0;
+function loadYoutubeApi(){
+  if(ytApiReady||(typeof YT!=='undefined'&&YT.Player)){ytApiReady=true;return;}
+  ytApiAttempts++;
+  var old=document.getElementById('ytApiScript');if(old)old.remove();
+  var s=document.createElement('script');
+  s.id='ytApiScript';
+  s.src='https://www.youtube.com/iframe_api?_retry='+ytApiAttempts;
+  s.onerror=function(){
+    console.error('Fallo de red cargando el script de YouTube (intento '+ytApiAttempts+')');
+    if(ytApiAttempts<3){setTimeout(loadYoutubeApi,1500);}
+    else{
+      var el=document.getElementById('ytLoadingMsg');
+      if(el)el.innerHTML='⚠️ No se pudo conectar con YouTube (error de red repetido).<br>Revisa tu conexión a internet e intenta de nuevo. Si persiste, prueba con otra red (datos móviles / otro WiFi).';
+    }
+  };
+  document.head.appendChild(s);
+}
+loadYoutubeApi();
+setTimeout(function(){
   if(!ytApiReady){
-    console.error('YouTube IFrame API no cargó (posible bloqueador de anuncios o red restringida)');
+    console.error('YouTube IFrame API no cargó a tiempo (posible bloqueador de anuncios o red restringida)');
   }
-},6000);
+},8000);
 function initYoutubePlayer(videoId){
   if(!videoId){
     document.getElementById('mdYtPlayer').innerHTML='<div class="yt-error">⚠️ El link de YouTube no es válido. Verifica que sea un link completo (youtube.com/watch?v=... o youtu.be/...)</div>';
