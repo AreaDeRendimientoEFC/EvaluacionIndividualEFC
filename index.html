@@ -355,6 +355,17 @@ tr:hover td{background:#fafafa;}
 </div>
 
 <!-- MODAL: Cerrar Sesión -->
+<div class="modal-bg" id="modalEditDate">
+  <div class="modal" style="width:320px">
+    <h2>Editar fecha del partido</h2>
+    <div class="form-group"><label>Fecha</label><input id="edDate" type="date" style="width:100%"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('modalEditDate')">Cancelar</button>
+      <button class="btn btn-green" onclick="saveEditedDate()">Guardar</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-bg" id="modalSession">
   <div class="modal">
     <h2>Cerrar Sesión</h2>
@@ -366,6 +377,7 @@ tr:hover td{background:#fafafa;}
         <span id="scoreGlobal" style="font-size:22px;font-weight:800"></span>
       </div>
     </div>
+    <div class="form-group"><label>Fecha del partido</label><input id="msDate" type="date" style="width:160px"></div>
     <div class="form-group"><label>Rival / Partido</label><input id="msRival" placeholder="Ej: Nacional U20"></div>
     <div class="form-group"><label>Minutos jugados</label><input id="msMin" type="number" placeholder="90" style="width:100px"></div>
     <div class="form-group"><label>Observaciones</label><textarea id="msObs" rows="2" placeholder="Notas del analista..."></textarea></div>
@@ -603,6 +615,13 @@ var PCOLS=['#F0601A','#007818','#e84040','#f5a623','#8b5cf6','#06b6d4'];
 function pColor(id){var i=players.findIndex(function(p){return p.id===id;});return PCOLS[i%PCOLS.length]||PCOLS[0];}
 function fmt(s){s=Math.max(0,Math.round(s));return String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0');}
 function fmtDate(d){return new Date(d).toLocaleDateString('es-CO',{day:'2-digit',month:'short',year:'numeric'});}
+function todayStr(){var d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+function dateFromInput(dateStr){
+  if(!dateStr)return new Date().toISOString();
+  var now=new Date(),parts=dateStr.split('-');
+  var d=new Date(parseInt(parts[0]),parseInt(parts[1])-1,parseInt(parts[2]),now.getHours(),now.getMinutes(),now.getSeconds());
+  return d.toISOString();
+}
 function colPct(p){return p>=90?'#007818':p>=70?'#9a6500':'#c02020';}
 function bdg(p){return p>=90?'bg':p>=70?'by':'br';}
 function tagLabel(t){return typeof t==='string'?t:t.label;}
@@ -856,6 +875,7 @@ function openCloseSession(pid,source){
   document.getElementById('scoreGlobal').style.color=sc.globalPct!==null?col(sc.globalPct):'var(--muted)';
   document.getElementById('scoreGlobal').textContent=sc.globalPct!==null?sc.globalPct+'%':'—';
   ['msRival','msObs'].forEach(function(i){document.getElementById(i).value='';});document.getElementById('msMin').value='';
+  document.getElementById('msDate').value=todayStr();
   openModal('modalSession');
 }
 function saveSession(){
@@ -864,7 +884,7 @@ function saveSession(){
   var roster=closingSource==='pregrabada'?prRoster:liveRoster;
   var e=roster[pid];if(!e)return;
   var labels=e.tags.map(tagLabel);var sc=computeScores(e.log,labels);
-  var sessObj={id:uid(),playerId:pid,playerName:e.name,date:new Date().toISOString(),rival:document.getElementById('msRival').value.trim()||'—',minutes:parseInt(document.getElementById('msMin').value)||0,obs:document.getElementById('msObs').value.trim(),log:[].concat(e.log),scores:{byTag:sc.byTag,globalPct:sc.globalPct},tagSnapshot:e.tags.map(function(t){return typeof t==='string'?{label:t,descYes:'',descNo:''}:{label:t.label,descYes:t.descYes||'',descNo:t.descNo||''};})};
+  var sessObj={id:uid(),playerId:pid,playerName:e.name,date:dateFromInput(document.getElementById('msDate').value),rival:document.getElementById('msRival').value.trim()||'—',minutes:parseInt(document.getElementById('msMin').value)||0,obs:document.getElementById('msObs').value.trim(),log:[].concat(e.log),scores:{byTag:sc.byTag,globalPct:sc.globalPct},tagSnapshot:e.tags.map(function(t){return typeof t==='string'?{label:t,descYes:'',descNo:''}:{label:t.label,descYes:t.descYes||'',descNo:t.descNo||''};})};
   if(closingSource==='pregrabada'&&prMode==='youtube'&&prYoutubeUrl){sessObj.videoUrl=prYoutubeUrl;sessObj.videoOffset=0;sessObj.videoOffset2=0;}
   sessions.push(sessObj);
   save();closeModal('modalSession');
@@ -1114,7 +1134,25 @@ function renderHistorial(){
   var tb=document.getElementById('histTable'),em=document.getElementById('histEmpty');
   if(!list.length){tb.innerHTML='';em.style.display='block';return;}
   em.style.display='none';
-  tb.innerHTML=list.map(function(s){var pct=s.scores&&s.scores.globalPct!=null?s.scores.globalPct:null;return '<tr><td><strong>'+s.playerName+'</strong></td><td>'+fmtDate(s.date)+'</td><td>'+s.rival+'</td><td>'+s.minutes+"'</td><td style=\"color:var(--muted)\">"+s.log.length+'</td><td>'+(pct!=null?'<span class="badge '+bdg(pct)+'">'+pct+'%</span>':'—')+'</td><td style="white-space:nowrap"><button class="btn btn-ghost btn-sm" onclick="openDetail(\''+s.id+'\')" style="margin-right:4px">Ver/Video</button><button class="btn btn-sm" onclick="deleteSession(\''+s.id+'\')" style="background:rgba(232,64,64,.08);border:1px solid rgba(232,64,64,.2);color:#c02020">✕</button></td></tr>';}).join('');
+  tb.innerHTML=list.map(function(s){var pct=s.scores&&s.scores.globalPct!=null?s.scores.globalPct:null;return '<tr><td><strong>'+s.playerName+'</strong></td><td><span onclick="editSessionDate(\''+s.id+'\')" style="cursor:pointer;text-decoration:underline dotted;color:var(--text)" title="Editar fecha">'+fmtDate(s.date)+' ✎</span></td><td>'+s.rival+'</td><td>'+s.minutes+"'</td><td style=\"color:var(--muted)\">"+s.log.length+'</td><td>'+(pct!=null?'<span class="badge '+bdg(pct)+'">'+pct+'%</span>':'—')+'</td><td style="white-space:nowrap"><button class="btn btn-ghost btn-sm" onclick="openDetail(\''+s.id+'\')" style="margin-right:4px">Ver/Video</button><button class="btn btn-sm" onclick="deleteSession(\''+s.id+'\')" style="background:rgba(232,64,64,.08);border:1px solid rgba(232,64,64,.2);color:#c02020">✕</button></td></tr>';}).join('');
+}
+var editingSessionId=null;
+function editSessionDate(id){
+  if(!requireAdmin())return;
+  var s=sessions.find(function(x){return x.id===id;});if(!s)return;
+  editingSessionId=id;
+  var d=new Date(s.date);
+  document.getElementById('edDate').value=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  openModal('modalEditDate');
+}
+function saveEditedDate(){
+  if(!requireAdmin())return;
+  var s=sessions.find(function(x){return x.id===editingSessionId;});if(!s)return;
+  var val=document.getElementById('edDate').value;if(!val){toast('Selecciona una fecha','#e84040');return;}
+  s.date=dateFromInput(val);
+  save();closeModal('modalEditDate');renderHistorial();
+  editingSessionId=null;
+  toast('✅ Fecha actualizada','#007818');
 }
 function deleteSession(id){if(!requireAdmin())return;var s=sessions.find(function(x){return x.id===id;});if(!s)return;showConfirm('Eliminar sesión','Sesión de '+s.playerName+' vs '+s.rival+' ('+fmtDate(s.date)+'). No se puede deshacer.',function(){sessions=sessions.filter(function(x){return x.id!==id;});save();renderHistorial();});}
 
