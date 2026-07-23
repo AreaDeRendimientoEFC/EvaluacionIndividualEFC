@@ -356,9 +356,10 @@ tr:hover td{background:#fafafa;}
 
 <!-- MODAL: Cerrar Sesión -->
 <div class="modal-bg" id="modalEditDate">
-  <div class="modal" style="width:320px">
-    <h2>Editar fecha del partido</h2>
+  <div class="modal" style="width:340px">
+    <h2>Editar partido</h2>
     <div class="form-group"><label>Fecha</label><input id="edDate" type="date" style="width:100%"></div>
+    <div class="form-group"><label>Rival / Partido</label><input id="edRival" placeholder="Ej: Nacional U20" style="width:100%"></div>
     <div class="modal-actions">
       <button class="btn btn-ghost" onclick="closeModal('modalEditDate')">Cancelar</button>
       <button class="btn btn-green" onclick="saveEditedDate()">Guardar</button>
@@ -642,6 +643,7 @@ function candidacyScore(avg){
 var CAND_NAMES=['','Iniciando','En proceso','Desarrollando','Consolidando','Candidato a ascenso'];
 var CAND_COLORS=['','#e84040','#f5a623','#c8c840','#90c840','#007818'];
 var CAND_DESC=['','Etapa inicial. Definir plan de trabajo individual.','En construcción. Requiere seguimiento intensivo.','Progreso claro. Trabajar las acciones más débiles.','Muy cerca. Mantener rendimiento y consolidar.','Listo para evaluar ascenso al equipo profesional.'];
+var MIN_TAG_SAMPLES=3; // mínimo de repeticiones de una acción para poder calificarla como fortaleza o área a trabajar
 
 function toast(msg,color){color=color||'#007818';var t=document.createElement('div');t.className='toast';t.textContent=msg;t.style.background=color;document.body.appendChild(t);setTimeout(function(){t.remove();},2500);}
 
@@ -1134,7 +1136,7 @@ function renderHistorial(){
   var tb=document.getElementById('histTable'),em=document.getElementById('histEmpty');
   if(!list.length){tb.innerHTML='';em.style.display='block';return;}
   em.style.display='none';
-  tb.innerHTML=list.map(function(s){var pct=s.scores&&s.scores.globalPct!=null?s.scores.globalPct:null;return '<tr><td><strong>'+s.playerName+'</strong></td><td><span onclick="editSessionDate(\''+s.id+'\')" style="cursor:pointer;text-decoration:underline dotted;color:var(--text)" title="Editar fecha">'+fmtDate(s.date)+' ✎</span></td><td>'+s.rival+'</td><td>'+s.minutes+"'</td><td style=\"color:var(--muted)\">"+s.log.length+'</td><td>'+(pct!=null?'<span class="badge '+bdg(pct)+'">'+pct+'%</span>':'—')+'</td><td style="white-space:nowrap"><button class="btn btn-ghost btn-sm" onclick="openDetail(\''+s.id+'\')" style="margin-right:4px">Ver/Video</button><button class="btn btn-sm" onclick="deleteSession(\''+s.id+'\')" style="background:rgba(232,64,64,.08);border:1px solid rgba(232,64,64,.2);color:#c02020">✕</button></td></tr>';}).join('');
+  tb.innerHTML=list.map(function(s){var pct=s.scores&&s.scores.globalPct!=null?s.scores.globalPct:null;return '<tr><td><strong>'+s.playerName+'</strong></td><td><span onclick="editSessionDate(\''+s.id+'\')" style="cursor:pointer;text-decoration:underline dotted;color:var(--text)" title="Editar partido">'+fmtDate(s.date)+' ✎</span></td><td><span onclick="editSessionDate(\''+s.id+'\')" style="cursor:pointer;text-decoration:underline dotted;color:var(--text)" title="Editar partido">'+s.rival+'</span></td><td>'+s.minutes+"'</td><td style=\"color:var(--muted)\">"+s.log.length+'</td><td>'+(pct!=null?'<span class="badge '+bdg(pct)+'">'+pct+'%</span>':'—')+'</td><td style="white-space:nowrap"><button class="btn btn-ghost btn-sm" onclick="openDetail(\''+s.id+'\')" style="margin-right:4px">Ver/Video</button><button class="btn btn-sm" onclick="deleteSession(\''+s.id+'\')" style="background:rgba(232,64,64,.08);border:1px solid rgba(232,64,64,.2);color:#c02020">✕</button></td></tr>';}).join('');
 }
 var editingSessionId=null;
 function editSessionDate(id){
@@ -1143,6 +1145,7 @@ function editSessionDate(id){
   editingSessionId=id;
   var d=new Date(s.date);
   document.getElementById('edDate').value=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  document.getElementById('edRival').value=s.rival==='—'?'':s.rival;
   openModal('modalEditDate');
 }
 function saveEditedDate(){
@@ -1150,9 +1153,10 @@ function saveEditedDate(){
   var s=sessions.find(function(x){return x.id===editingSessionId;});if(!s)return;
   var val=document.getElementById('edDate').value;if(!val){toast('Selecciona una fecha','#e84040');return;}
   s.date=dateFromInput(val);
+  s.rival=document.getElementById('edRival').value.trim()||'—';
   save();closeModal('modalEditDate');renderHistorial();
   editingSessionId=null;
-  toast('✅ Fecha actualizada','#007818');
+  toast('✅ Partido actualizado','#007818');
 }
 function deleteSession(id){if(!requireAdmin())return;var s=sessions.find(function(x){return x.id===id;});if(!s)return;showConfirm('Eliminar sesión','Sesión de '+s.playerName+' vs '+s.rival+' ('+fmtDate(s.date)+'). No se puede deshacer.',function(){sessions=sessions.filter(function(x){return x.id!==id;});save();renderHistorial();});}
 
@@ -1475,8 +1479,11 @@ function renderDashboard(){
   var evalHtml='';
   if(pcts.length>=2){
     evalHtml+='<p>🎯 <strong>Acierto promedio:</strong> '+avgAc+'%</p>';
-    var ts=allTagLabels.map(function(t){var d=scAll.byTag[t]||{yes:0,no:0};var tot=d.yes+d.no;return{t:t,pct:tot>0?Math.round(d.yes/tot*100):null};}).filter(function(x){return x.pct!==null;}).sort(function(a,b){return a.pct-b.pct;});
-    if(ts.length){evalHtml+='<p>🔴 <strong>A trabajar:</strong> '+ts[0].t+' ('+ts[0].pct+'%)</p><p>✅ <strong>Punto fuerte:</strong> '+ts[ts.length-1].t+' ('+ts[ts.length-1].pct+'%)</p>';}
+    var tsAll=allTagLabels.map(function(t){var d=scAll.byTag[t]||{yes:0,no:0};var tot=d.yes+d.no;return{t:t,pct:tot>0?Math.round(d.yes/tot*100):null,tot:tot};}).filter(function(x){return x.pct!==null;});
+    var ts=tsAll.filter(function(x){return x.tot>=MIN_TAG_SAMPLES;}).sort(function(a,b){return a.pct-b.pct;});
+    if(ts.length>=2){evalHtml+='<p>🔴 <strong>A trabajar:</strong> '+ts[0].t+' ('+ts[0].pct+'% en '+ts[0].tot+' acciones)</p><p>✅ <strong>Punto fuerte:</strong> '+ts[ts.length-1].t+' ('+ts[ts.length-1].pct+'% en '+ts[ts.length-1].tot+' acciones)</p>';}
+    else if(ts.length===1){evalHtml+='<p>📌 <strong>'+ts[0].t+'</strong> es la única acción con suficientes repeticiones (mínimo '+MIN_TAG_SAMPLES+'): '+ts[0].pct+'% en '+ts[0].tot+' acciones. Se necesita otra acción con al menos '+MIN_TAG_SAMPLES+' repeticiones para comparar.</p>';}
+    else{evalHtml+='<p style="color:var(--muted)">Aún no hay acciones con al menos '+MIN_TAG_SAMPLES+' repeticiones para determinar fortalezas y áreas a trabajar de forma confiable.</p>';}
     if(cScore!==null){evalHtml+='<div style="margin-top:10px;padding:12px;border-radius:8px;background:'+(cScore>=4?'rgba(0,120,24,.07)':cScore>=3?'rgba(245,166,35,.08)':'rgba(232,64,64,.07)')+';border:1px solid '+CAND_COLORS[cScore]+'"><strong style="color:'+CAND_COLORS[cScore]+'">Nivel '+cScore+'/5 — '+CAND_NAMES[cScore]+'</strong><br><span style="font-size:13px">'+CAND_DESC[cScore]+'</span></div>';}
   }else{evalHtml='<p style="color:var(--muted)">Se necesitan al menos 2 sesiones.</p>';}
   document.getElementById('progressEval').innerHTML=evalHtml;
@@ -1542,9 +1549,11 @@ function buildAndPrintPDF(p,targetSess,type){
     });
     var pctE=se.scores&&se.scores.globalPct!=null?se.scores.globalPct:null;
     var cE=pctE!==null?colF(pctE):'#6b7a8a';
-    var actScores=allTagLabels.map(function(t){var d=scAll.byTag[t]||{yes:0,no:0};var tot=d.yes+d.no;return{t:t,pct:tot>0?Math.round(d.yes/tot*100):null,tot:tot};}).filter(function(x){return x.pct!==null;}).sort(function(a,b){return a.pct-b.pct;});
+    var actScores=allTagLabels.map(function(t){var d=scAll.byTag[t]||{yes:0,no:0};var tot=d.yes+d.no;return{t:t,pct:tot>0?Math.round(d.yes/tot*100):null,tot:tot};}).filter(function(x){return x.pct!==null;});
     partidoEvalHTML+='<div style="display:flex;gap:12px;margin-bottom:14px"><div style="flex:1;background:#f9fafb;border-radius:8px;padding:12px;border-bottom:2px solid '+cE+'"><div style="font-size:10px;color:#6b7a8a;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Acierto global</div><div style="font-size:28px;font-weight:800;color:'+cE+'">'+(pctE!==null?pctE+'%':'—')+'</div></div><div style="flex:1;background:#f9fafb;border-radius:8px;padding:12px;border-bottom:2px solid #F0601A"><div style="font-size:10px;color:#6b7a8a;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Acciones registradas</div><div style="font-size:28px;font-weight:800;color:#F0601A">'+se.log.length+'</div></div></div>';
-    if(actScores.length){var best=actScores[actScores.length-1],worst=actScores[0];partidoEvalHTML+='<div style="display:flex;gap:12px;margin-bottom:14px"><div style="flex:1;background:rgba(0,120,24,.06);border:1px solid #007818;border-radius:8px;padding:12px"><div style="font-size:10px;font-weight:700;color:#007818;margin-bottom:4px">✅ MEJOR ACCIÓN</div><div style="font-size:13px;font-weight:700">'+best.t+'</div><div style="font-size:20px;font-weight:800;color:#007818;margin-top:4px">'+best.pct+'% <span style="font-size:11px;font-weight:400;color:#6b7a8a">('+best.tot+' veces)</span></div></div><div style="flex:1;background:rgba(232,64,64,.06);border:1px solid #e84040;border-radius:8px;padding:12px"><div style="font-size:10px;font-weight:700;color:#e84040;margin-bottom:4px">🔴 A MEJORAR</div><div style="font-size:13px;font-weight:700">'+worst.t+'</div><div style="font-size:20px;font-weight:800;color:#e84040;margin-top:4px">'+worst.pct+'% <span style="font-size:11px;font-weight:400;color:#6b7a8a">('+worst.tot+' veces)</span></div></div></div>';}
+    var actScoresQual=actScores.filter(function(x){return x.tot>=MIN_TAG_SAMPLES;}).sort(function(a,b){return a.pct-b.pct;});
+    if(actScoresQual.length>=2){var best=actScoresQual[actScoresQual.length-1],worst=actScoresQual[0];partidoEvalHTML+='<div style="display:flex;gap:12px;margin-bottom:14px"><div style="flex:1;background:rgba(0,120,24,.06);border:1px solid #007818;border-radius:8px;padding:12px"><div style="font-size:10px;font-weight:700;color:#007818;margin-bottom:4px">✅ MEJOR ACCIÓN</div><div style="font-size:13px;font-weight:700">'+best.t+'</div><div style="font-size:20px;font-weight:800;color:#007818;margin-top:4px">'+best.pct+'% <span style="font-size:11px;font-weight:400;color:#6b7a8a">('+best.tot+' veces)</span></div></div><div style="flex:1;background:rgba(232,64,64,.06);border:1px solid #e84040;border-radius:8px;padding:12px"><div style="font-size:10px;font-weight:700;color:#e84040;margin-bottom:4px">🔴 A MEJORAR</div><div style="font-size:13px;font-weight:700">'+worst.t+'</div><div style="font-size:20px;font-weight:800;color:#e84040;margin-top:4px">'+worst.pct+'% <span style="font-size:11px;font-weight:400;color:#6b7a8a">('+worst.tot+' veces)</span></div></div></div>';}
+    else{partidoEvalHTML+='<div style="background:#f9fafb;border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:14px;font-size:12px;color:#6b7a8a">Se necesitan al menos 2 acciones con '+MIN_TAG_SAMPLES+'+ repeticiones cada una en este partido para destacar mejor acción / a mejorar.</div>';}
     var p1=se.log.filter(function(l){return l.period===1;}),p2=se.log.filter(function(l){return l.period===2;});
     if(p1.length&&p2.length){var sc1=computeScores(p1,allTagLabels),sc2=computeScores(p2,allTagLabels);var c1=sc1.globalPct!==null?colF(sc1.globalPct):'#6b7a8a',c2=sc2.globalPct!==null?colF(sc2.globalPct):'#6b7a8a';partidoEvalHTML+='<div style="background:#f9fafb;border-radius:8px;padding:12px;margin-bottom:14px"><div style="font-size:10px;font-weight:700;color:#6b7a8a;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Acierto por Tiempo</div><div style="display:flex;gap:12px"><div style="flex:1;text-align:center"><div style="font-size:11px;color:#6b7a8a;margin-bottom:4px">1er Tiempo</div><div style="font-size:24px;font-weight:800;color:'+c1+'">'+(sc1.globalPct!==null?sc1.globalPct+'%':'—')+'</div><div style="font-size:11px;color:#6b7a8a">'+p1.length+' acciones</div></div><div style="flex:1;text-align:center"><div style="font-size:11px;color:#6b7a8a;margin-bottom:4px">2do Tiempo</div><div style="font-size:24px;font-weight:800;color:'+c2+'">'+(sc2.globalPct!==null?sc2.globalPct+'%':'—')+'</div><div style="font-size:11px;color:#6b7a8a">'+p2.length+' acciones</div></div></div></div>';}
     if(se.obs){partidoEvalHTML+='<div style="background:#f9fafb;border:1px solid #eee;border-radius:8px;padding:12px"><div style="font-size:10px;font-weight:700;color:#6b7a8a;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Observaciones del Analista</div><div style="font-size:13px;line-height:1.6">'+se.obs+'</div></div>';}
